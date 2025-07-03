@@ -360,7 +360,9 @@ void wifi_init_and_start(void) {
 
 /************************** 程序入口 **************************/
 void app_main(void) {
+    // 初始化WiFi和UART
     wifi_init_and_start();
+
     // 创建串口命令任务
     xTaskCreate(uart_command_task, "uart_cmd_task", 4096, NULL, 5, NULL);
 }
