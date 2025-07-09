@@ -52,6 +52,7 @@ D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/esp_netif/libesp_ne
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/wpa_supplicant/libwpa_supplicant.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/esp_coex/libesp_coex.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/esp_wifi/libesp_wifi.a
+D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/bt/libbt.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/unity/libunity.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/cmock/libcmock.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/console/libconsole.a
@@ -84,3 +85,8 @@ D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/touch_element/libto
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/usb/libusb.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/wifi_provisioning/libwifi_provisioning.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/main/libmain.a
+D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/Task_manager/libTask_manager.a
+D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/Bluetooth_module/libBluetooth_module.a
+D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/Uart_module/libUart_module.a
+D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/Wifi_module/libWifi_module.a
+D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/app_msg/libapp_msg.a

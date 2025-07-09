@@ -52,6 +52,7 @@ $<TARGET_FILE:__idf_esp_netif>
 $<TARGET_FILE:__idf_wpa_supplicant>
 $<TARGET_FILE:__idf_esp_coex>
 $<TARGET_FILE:__idf_esp_wifi>
+$<TARGET_FILE:__idf_bt>
 $<TARGET_FILE:__idf_unity>
 $<TARGET_FILE:__idf_cmock>
 $<TARGET_FILE:__idf_console>
@@ -84,3 +85,8 @@ $<TARGET_FILE:__idf_touch_element>
 $<TARGET_FILE:__idf_usb>
 $<TARGET_FILE:__idf_wifi_provisioning>
 $<TARGET_FILE:__idf_main>
+$<TARGET_FILE:__idf_Task_manager>
+$<TARGET_FILE:__idf_Bluetooth_module>
+$<TARGET_FILE:__idf_Uart_module>
+$<TARGET_FILE:__idf_Wifi_module>
+$<TARGET_FILE:__idf_app_msg>

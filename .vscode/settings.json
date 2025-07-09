@@ -28,5 +28,13 @@
     "IDF_TARGET": "esp32s3"
   },
   "idf.portWin": "COM29",
-  "idf.flashType": "UART"
+  "idf.flashType": "UART",
+  "files.associations": {
+    "ble_hs.h": "c",
+    "bluetooth_module.h": "c",
+    "cstdlib": "c",
+    "esp_nimble_hci.h": "c",
+    "string.h": "c",
+    "ble_svc_gap.h": "c"
+  }
 }
