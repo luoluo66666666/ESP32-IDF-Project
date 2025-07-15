@@ -1,8 +1,6 @@
 #include "driver/uart.h"
 #include "Task_manager.h"
-
-#define UART_NUM UART_NUM_1
-#define BUF_SIZE 256
+#include "Uart_module.h"
 
 static void uart_task(void *arg)
 {
@@ -24,6 +22,7 @@ static void uart_task(void *arg)
     }
 }
 
+
 void uart_module_start(void)
 {
     const uart_config_t uart_config = {
@@ -35,7 +34,7 @@ void uart_module_start(void)
     };
     uart_driver_install(UART_NUM, BUF_SIZE * 2, 0, 0, NULL, 0);
     uart_param_config(UART_NUM, &uart_config);
-    uart_set_pin(UART_NUM, 17, 16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE); // 修改为实际引脚
+    // uart_set_pin(UART_NUM, 17, 16, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE); // 修改为实际引脚
 
-    xTaskCreate(uart_task, "uart_task", 4096, NULL, 10, NULL);
+    // xTaskCreate(uart_task, "uart_task", 4096, NULL, 10, NULL);
 }

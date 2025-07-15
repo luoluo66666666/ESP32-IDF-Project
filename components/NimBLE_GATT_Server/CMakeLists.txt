@@ -1,0 +1,15 @@
+idf_component_register(
+    SRCS 
+        "src/gap.c"
+        "src/gatt_svc.c"
+        "src/heart_rate_mock.c"
+    INCLUDE_DIRS 
+        "include"
+    REQUIRES 
+        nvs_flash 
+        esp_event 
+        driver 
+        Task_manager 
+        bt
+        Uart_module
+)

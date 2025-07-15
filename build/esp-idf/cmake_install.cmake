@@ -574,6 +574,11 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
+  include("D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/NimBLE_GATT_Server/cmake_install.cmake")
+endif()
+
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
   include("D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/Wifi_module/cmake_install.cmake")
 endif()
 

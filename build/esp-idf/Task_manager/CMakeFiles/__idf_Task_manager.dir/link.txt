@@ -1,0 +1,2 @@
+D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ar.exe qc libTask_manager.a CMakeFiles/__idf_Task_manager.dir/Task_manager.c.obj
+D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ranlib.exe libTask_manager.a
