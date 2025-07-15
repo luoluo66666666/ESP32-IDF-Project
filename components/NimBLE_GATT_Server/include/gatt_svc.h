@@ -20,7 +20,11 @@ void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg);
 void gatt_svr_subscribe_cb(struct ble_gap_event *event);
 int gatt_svc_init(void);
 void ble_queue_init(void);
-int ble_send_data(const char *data);
+void ble_send_data_task(const char *data);
+void ble_receive_task(void *param);
 void uart_send_task(void *param);
+
+static int data_access(uint16_t conn_handle, uint16_t attr_handle,
+                       struct ble_gatt_access_ctxt *ctxt, void *arg);
 
 #endif // GATT_SVR_H

@@ -52,6 +52,26 @@ static const ble_uuid128_t led_chr_uuid =
     BLE_UUID128_INIT(0x23, 0xd1, 0xbc, 0xea, 0x5f, 0x78, 0x23, 0x15, 0xde, 0xef,
                      0x12, 0x12, 0x25, 0x15, 0x00, 0x00);
 
+
+/*-------------------Private Define-----------------------*/
+// 自定义服务 UUID（128位）
+static const ble_uuid128_t my_custom_svc_uuid =
+    BLE_UUID128_INIT(0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0,
+                     0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0);
+
+// 自定义特征 UUID（128位）
+static const ble_uuid128_t my_custom_chr_uuid =
+    BLE_UUID128_INIT(0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89,
+                     0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89);
+
+// 特征值句柄
+static uint16_t my_custom_chr_val_handle;
+
+static uint16_t g_conn_handle = 0;  // 保存连接句柄
+static bool notify_enabled = false; // 客户端是否已启用 notify
+
+
+
 /* GATT services table */
 static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     /* Heart rate service */
@@ -82,8 +102,20 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
     },
 
     {
-        0, /* No more services. */
+        .type = BLE_GATT_SVC_TYPE_PRIMARY,
+        .uuid = &my_custom_svc_uuid.u,
+        .characteristics =
+            (struct ble_gatt_chr_def[]){/* LED characteristic */
+                                        {.uuid = &my_custom_chr_uuid.u,
+                                         .access_cb = data_access,
+                                         .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY,
+                                         .val_handle = &my_custom_chr_val_handle},
+                                        {0}},
     },
+
+    {
+        0, /* No more services. */
+    } /* End of services table */
 };
 
 /* Private functions */
@@ -352,17 +384,63 @@ int gatt_svc_init(void) {
 }
 
 
-// 发送任务：从队列取数据发送通知
+// 处理BLE读写请求的回调函数
+static int data_access(uint16_t conn_handle, uint16_t attr_handle,
+                       struct ble_gatt_access_ctxt *ctxt, void *arg) {
+    int rc;
+
+    switch (ctxt->op) {
+    case BLE_GATT_ACCESS_OP_READ_CHR:
+        // 暂时不支持读取操作，返回错误码
+        ESP_LOGW(TAG, "Read operation not supported");
+        return BLE_ATT_ERR_UNLIKELY;
+
+    case BLE_GATT_ACCESS_OP_WRITE_CHR:
+        {
+            // 获取写入数据长度，防止超过队列项大小
+            int len = OS_MBUF_PKTLEN(ctxt->om);
+            if (len > QUEUE_ITEM_SIZE) len = QUEUE_ITEM_SIZE;
+
+            // 定义数据结构存放写入数据
+            ble_data_t data = {0};
+            // 从mbuf复制数据到缓冲区
+            os_mbuf_copydata(ctxt->om, 0, len, data.buf);
+            data.len = len;
+
+            // 如果接收队列已初始化，尝试写入数据
+            if (ble_rx_queue != NULL) {
+                if (xQueueSend(ble_rx_queue, &data, 0) != pdPASS) {
+                    ESP_LOGW(TAG, "Failed to write data to RX queue");
+                } else {
+                    ESP_LOGI(TAG, "Data written to RX queue: %.*s", len, data.buf);
+                }
+            }
+            return 0; // 写入成功
+        }
+
+    default:
+        // 未知操作，打印错误并返回错误码
+        ESP_LOGE(TAG, "Unknown operation: %d", ctxt->op);
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+}
+
+
+// 发送任务：从发送队列中读取数据，并通过BLE通知发送给客户端
 void ble_send_task(void *param) {
     ble_data_t data;
     while (1) {
+        // 判断是否已初始化连接句柄且通知已启用
         if (heart_rate_chr_conn_handle_inited && heart_rate_ind_status) {
+            // 阻塞等待发送队列数据
             if (xQueueReceive(ble_tx_queue, &data, portMAX_DELAY) == pdTRUE) {
+                // 创建mbuf结构存放发送数据
                 struct os_mbuf *om = ble_hs_mbuf_from_flat(data.buf, data.len);
                 if (om == NULL) {
                     ESP_LOGE(TAG, "Failed to allocate mbuf");
                     continue;
                 }
+                // 发送通知
                 int rc = ble_gatts_notify_custom(heart_rate_chr_conn_handle, heart_rate_chr_val_handle, om);
                 if (rc != 0) {
                     ESP_LOGE(TAG, "Notify send failed, rc=%d", rc);
@@ -371,54 +449,44 @@ void ble_send_task(void *param) {
                 }
             }
         } else {
+            // 未初始化时，任务延时等待
             vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
 }
 
 
-
+// 接收任务：从接收队列读取数据，处理后回环到发送队列实现回环发送
 void ble_receive_task(void *param) {
     ble_data_t data;
     while (1) {
+        // 阻塞等待接收队列数据
         if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE) {
-            ESP_LOGI(TAG, "Received data processed: %.*s", (int)data.len, data.buf);
-            /* TODO: 自己处理收到的数据 */
+            ESP_LOGI(TAG, "Received data processed (loopback): %.*s", (int)data.len, data.buf);
+
+            // 将数据直接放入发送队列，实现数据回环发送
+            if (ble_tx_queue != NULL) {
+                if (xQueueSend(ble_tx_queue, &data, 10 / portTICK_PERIOD_MS) != pdPASS) {
+                    ESP_LOGW(TAG, "Send queue full, loopback failed");
+                } else {
+                    ESP_LOGI(TAG, "Loopback data queued for sending");
+                }
+            }
         }
     }
-    vTaskDelete(NULL);
+    vTaskDelete(NULL); // 任务退出（一般不会执行到这里）
 }
 
 
-// 外部调用函数：向发送队列放入数据
 
-int ble_send_data(const char *data) {
-    if (ble_tx_queue == NULL) return -1;
-
-    size_t len = strlen(data);
-    if (len == 0 || len >= QUEUE_ITEM_SIZE) return -2;
-
-    ble_data_t send_data = {0};
-    memcpy(send_data.buf, data, len);
-    send_data.len = len;
-
-    if (xQueueSend(ble_tx_queue, &send_data, 10 / portTICK_PERIOD_MS) == pdTRUE) {
-        ESP_LOGI(TAG, "Data queued for send: %s", data);
-        return 0;
-    } else {
-        ESP_LOGW(TAG, "Send queue full, send failed");
-        return -3;
-    }
-}
 
 
 void uart_send_task(void *param) {
-    uint8_t data[QUEUE_ITEM_SIZE];
+    ble_data_t data;
     while (1) {
-        if (xQueueReceive(ble_rx_queue, data, portMAX_DELAY) == pdTRUE) {
-            // 发送数据到串口
-            uart_write_bytes(UART_NUM_1, (const char *)data, strlen((char *)data));
-            ESP_LOGI(TAG, "Sent to UART: %s", data);
+        if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE) {
+            uart_write_bytes(UART_NUM_0, (const char *)data.buf, data.len);
+            ESP_LOGI(TAG, "Sent to UART: %.*s", (int)data.len, data.buf);
         }
     }
 }

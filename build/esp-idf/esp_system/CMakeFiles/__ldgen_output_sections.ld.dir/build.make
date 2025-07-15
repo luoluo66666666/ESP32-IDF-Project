@@ -213,8 +213,8 @@ esp-idf/esp_system/ld/sections.ld: esp-idf/wifi_provisioning/libwifi_provisionin
 esp-idf/esp_system/ld/sections.ld: esp-idf/main/libmain.a
 esp-idf/esp_system/ld/sections.ld: esp-idf/Task_manager/libTask_manager.a
 esp-idf/esp_system/ld/sections.ld: esp-idf/Bluetooth_module/libBluetooth_module.a
-esp-idf/esp_system/ld/sections.ld: esp-idf/NimBLE_GATT_Server/libNimBLE_GATT_Server.a
 esp-idf/esp_system/ld/sections.ld: esp-idf/Uart_module/libUart_module.a
+esp-idf/esp_system/ld/sections.ld: esp-idf/NimBLE_GATT_Server/libNimBLE_GATT_Server.a
 esp-idf/esp_system/ld/sections.ld: esp-idf/Wifi_module/libWifi_module.a
 esp-idf/esp_system/ld/sections.ld: esp-idf/app_msg/libapp_msg.a
 esp-idf/esp_system/ld/sections.ld: D:/Micpython-Project/test-1/main/wifi_eap_fast/sdkconfig

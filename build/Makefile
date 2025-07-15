@@ -1968,19 +1968,6 @@ __idf_Bluetooth_module/fast:
 .PHONY : __idf_Bluetooth_module/fast
 
 #=============================================================================
-# Target rules for targets named __idf_NimBLE_GATT_Server
-
-# Build rule for target.
-__idf_NimBLE_GATT_Server: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 __idf_NimBLE_GATT_Server
-.PHONY : __idf_NimBLE_GATT_Server
-
-# fast build rule for target.
-__idf_NimBLE_GATT_Server/fast:
-	$(MAKE) $(MAKESILENT) -f esp-idf\NimBLE_GATT_Server\CMakeFiles\__idf_NimBLE_GATT_Server.dir\build.make esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/build
-.PHONY : __idf_NimBLE_GATT_Server/fast
-
-#=============================================================================
 # Target rules for targets named __idf_Uart_module
 
 # Build rule for target.
@@ -1992,6 +1979,19 @@ __idf_Uart_module: cmake_check_build_system
 __idf_Uart_module/fast:
 	$(MAKE) $(MAKESILENT) -f esp-idf\Uart_module\CMakeFiles\__idf_Uart_module.dir\build.make esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/build
 .PHONY : __idf_Uart_module/fast
+
+#=============================================================================
+# Target rules for targets named __idf_NimBLE_GATT_Server
+
+# Build rule for target.
+__idf_NimBLE_GATT_Server: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 __idf_NimBLE_GATT_Server
+.PHONY : __idf_NimBLE_GATT_Server
+
+# fast build rule for target.
+__idf_NimBLE_GATT_Server/fast:
+	$(MAKE) $(MAKESILENT) -f esp-idf\NimBLE_GATT_Server\CMakeFiles\__idf_NimBLE_GATT_Server.dir\build.make esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/build
+.PHONY : __idf_NimBLE_GATT_Server/fast
 
 #=============================================================================
 # Target rules for targets named __idf_Wifi_module

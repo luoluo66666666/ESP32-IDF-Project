@@ -229,8 +229,8 @@ set(CMAKE_ASM_TARGET_INCLUDE_PATH
   "D:/ESP-IDF/v5.4.1/esp-idf/components/wifi_provisioning/include"
   "D:/Micpython-Project/test-1/main/wifi_eap_fast/components/Task_manager/include"
   "D:/Micpython-Project/test-1/main/wifi_eap_fast/components/Bluetooth_module/include"
-  "D:/Micpython-Project/test-1/main/wifi_eap_fast/components/NimBLE_GATT_Server/include"
   "D:/Micpython-Project/test-1/main/wifi_eap_fast/components/Uart_module/include"
+  "D:/Micpython-Project/test-1/main/wifi_eap_fast/components/NimBLE_GATT_Server/include"
   "D:/Micpython-Project/test-1/main/wifi_eap_fast/components/Wifi_module/include"
   "D:/Micpython-Project/test-1/main/wifi_eap_fast/components/app_msg/include"
   )

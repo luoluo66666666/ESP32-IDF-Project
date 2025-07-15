@@ -208,8 +208,8 @@ esp-idf/all: esp-idf/wifi_provisioning/all
 esp-idf/all: esp-idf/main/all
 esp-idf/all: esp-idf/Task_manager/all
 esp-idf/all: esp-idf/Bluetooth_module/all
-esp-idf/all: esp-idf/NimBLE_GATT_Server/all
 esp-idf/all: esp-idf/Uart_module/all
+esp-idf/all: esp-idf/NimBLE_GATT_Server/all
 esp-idf/all: esp-idf/Wifi_module/all
 esp-idf/all: esp-idf/app_msg/all
 .PHONY : esp-idf/all
@@ -321,8 +321,8 @@ esp-idf/preinstall: esp-idf/wifi_provisioning/preinstall
 esp-idf/preinstall: esp-idf/main/preinstall
 esp-idf/preinstall: esp-idf/Task_manager/preinstall
 esp-idf/preinstall: esp-idf/Bluetooth_module/preinstall
-esp-idf/preinstall: esp-idf/NimBLE_GATT_Server/preinstall
 esp-idf/preinstall: esp-idf/Uart_module/preinstall
+esp-idf/preinstall: esp-idf/NimBLE_GATT_Server/preinstall
 esp-idf/preinstall: esp-idf/Wifi_module/preinstall
 esp-idf/preinstall: esp-idf/app_msg/preinstall
 .PHONY : esp-idf/preinstall
@@ -434,8 +434,8 @@ esp-idf/clean: esp-idf/wifi_provisioning/clean
 esp-idf/clean: esp-idf/main/clean
 esp-idf/clean: esp-idf/Task_manager/clean
 esp-idf/clean: esp-idf/Bluetooth_module/clean
-esp-idf/clean: esp-idf/NimBLE_GATT_Server/clean
 esp-idf/clean: esp-idf/Uart_module/clean
+esp-idf/clean: esp-idf/NimBLE_GATT_Server/clean
 esp-idf/clean: esp-idf/Wifi_module/clean
 esp-idf/clean: esp-idf/app_msg/clean
 .PHONY : esp-idf/clean
@@ -2510,8 +2510,8 @@ CMakeFiles/erase_flash.dir/clean:
 # Target rules for target CMakeFiles/merge-bin.dir
 
 # All Build rule for target.
-CMakeFiles/merge-bin.dir/all: CMakeFiles/gen_project_binary.dir/all
 CMakeFiles/merge-bin.dir/all: CMakeFiles/bootloader.dir/all
+CMakeFiles/merge-bin.dir/all: CMakeFiles/gen_project_binary.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\merge-bin.dir\build.make CMakeFiles/merge-bin.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\merge-bin.dir\build.make CMakeFiles/merge-bin.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target merge-bin"
@@ -2643,8 +2643,8 @@ CMakeFiles/_project_elf_src.dir/clean:
 # Target rules for target CMakeFiles/wifi_eap_fast.elf.dir
 
 # All Build rule for target.
-CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: CMakeFiles/_project_elf_src.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/app_trace/CMakeFiles/__idf_app_trace.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/esp_hid/CMakeFiles/__idf_esp_hid.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/esp_eth/CMakeFiles/__idf_esp_eth.dir/all
@@ -2654,30 +2654,30 @@ CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/unity/CMakeFiles/__idf_unity.dir/a
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/cmock/CMakeFiles/__idf_cmock.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/console/CMakeFiles/__idf_console.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/esp_driver_cam/CMakeFiles/__idf_esp_driver_cam.dir/all
-CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/touch_element/CMakeFiles/__idf_touch_element.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/spiffs/CMakeFiles/__idf_spiffs.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/touch_element/CMakeFiles/__idf_touch_element.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all
-CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/main/CMakeFiles/__idf_main.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/usb/CMakeFiles/__idf_usb.dir/all
-CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
-CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/all
-CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/esp_lcd/CMakeFiles/__idf_esp_lcd.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/main/CMakeFiles/__idf_main.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/protobuf-c/CMakeFiles/__idf_protobuf-c.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/esp_lcd/CMakeFiles/__idf_esp_lcd.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all
-CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/wear_levelling/CMakeFiles/__idf_wear_levelling.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/espcoredump/CMakeFiles/__idf_espcoredump.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/fatfs/CMakeFiles/__idf_fatfs.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/wear_levelling/CMakeFiles/__idf_wear_levelling.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/nvs_sec_provider/CMakeFiles/__idf_nvs_sec_provider.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/json/CMakeFiles/__idf_json.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/mqtt/CMakeFiles/__idf_mqtt.dir/all
-CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/perfmon/CMakeFiles/__idf_perfmon.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/rt/CMakeFiles/__idf_rt.dir/all
-CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/perfmon/CMakeFiles/__idf_perfmon.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/Wifi_module/CMakeFiles/__idf_Wifi_module.dir/all
 CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/app_msg/CMakeFiles/__idf_app_msg.dir/all
-CMakeFiles/wifi_eap_fast.elf.dir/all: CMakeFiles/_project_elf_src.dir/all
+CMakeFiles/wifi_eap_fast.elf.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\wifi_eap_fast.elf.dir\build.make CMakeFiles/wifi_eap_fast.elf.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\wifi_eap_fast.elf.dir\build.make CMakeFiles/wifi_eap_fast.elf.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num=100 "Built target wifi_eap_fast.elf"
@@ -2781,8 +2781,8 @@ CMakeFiles/size-components.dir/clean:
 # Target rules for target CMakeFiles/dfu.dir
 
 # All Build rule for target.
-CMakeFiles/dfu.dir/all: CMakeFiles/gen_project_binary.dir/all
 CMakeFiles/dfu.dir/all: CMakeFiles/bootloader.dir/all
+CMakeFiles/dfu.dir/all: CMakeFiles/gen_project_binary.dir/all
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\dfu.dir\build.make CMakeFiles/dfu.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles\dfu.dir\build.make CMakeFiles/dfu.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target dfu"
@@ -3979,7 +3979,6 @@ esp-idf/esp_system/CMakeFiles/sections.ld.in.dir/clean:
 # Target rules for target esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir
 
 # All Build rule for target.
-esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/app_trace/CMakeFiles/__idf_app_trace.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/esp_hid/CMakeFiles/__idf_esp_hid.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/esp_eth/CMakeFiles/__idf_esp_eth.dir/all
@@ -3989,29 +3988,30 @@ esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/unity/
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/cmock/CMakeFiles/__idf_cmock.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/console/CMakeFiles/__idf_console.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/esp_driver_cam/CMakeFiles/__idf_esp_driver_cam.dir/all
-esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/touch_element/CMakeFiles/__idf_touch_element.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/spiffs/CMakeFiles/__idf_spiffs.dir/all
+esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/touch_element/CMakeFiles/__idf_touch_element.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all
-esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/main/CMakeFiles/__idf_main.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/usb/CMakeFiles/__idf_usb.dir/all
-esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
-esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/all
-esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/esp_lcd/CMakeFiles/__idf_esp_lcd.dir/all
+esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
+esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/main/CMakeFiles/__idf_main.dir/all
+esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/protobuf-c/CMakeFiles/__idf_protobuf-c.dir/all
+esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/esp_lcd/CMakeFiles/__idf_esp_lcd.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all
-esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/wear_levelling/CMakeFiles/__idf_wear_levelling.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/espcoredump/CMakeFiles/__idf_espcoredump.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/fatfs/CMakeFiles/__idf_fatfs.dir/all
+esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/wear_levelling/CMakeFiles/__idf_wear_levelling.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/nvs_sec_provider/CMakeFiles/__idf_nvs_sec_provider.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/json/CMakeFiles/__idf_json.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/mqtt/CMakeFiles/__idf_mqtt.dir/all
-esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/perfmon/CMakeFiles/__idf_perfmon.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/rt/CMakeFiles/__idf_rt.dir/all
-esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all
+esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/perfmon/CMakeFiles/__idf_perfmon.dir/all
+esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/Wifi_module/CMakeFiles/__idf_Wifi_module.dir/all
 esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/app_msg/CMakeFiles/__idf_app_msg.dir/all
+esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\esp_system\CMakeFiles\__ldgen_output_sections.ld.dir\build.make esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\esp_system\CMakeFiles\__ldgen_output_sections.ld.dir\build.make esp-idf/esp_system/CMakeFiles/__ldgen_output_sections.ld.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target __ldgen_output_sections.ld"
@@ -5155,8 +5155,8 @@ esp-idf/unity/CMakeFiles/__idf_unity.dir/clean:
 # Target rules for target esp-idf/cmock/CMakeFiles/__idf_cmock.dir
 
 # All Build rule for target.
-esp-idf/cmock/CMakeFiles/__idf_cmock.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/cmock/CMakeFiles/__idf_cmock.dir/all: esp-idf/unity/CMakeFiles/__idf_unity.dir/all
+esp-idf/cmock/CMakeFiles/__idf_cmock.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\cmock\CMakeFiles\__idf_cmock.dir\build.make esp-idf/cmock/CMakeFiles/__idf_cmock.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\cmock\CMakeFiles\__idf_cmock.dir\build.make esp-idf/cmock/CMakeFiles/__idf_cmock.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target __idf_cmock"
@@ -5364,8 +5364,8 @@ esp-idf/esp_gdbstub/CMakeFiles/__idf_esp_gdbstub.dir/clean:
 # Target rules for target esp-idf/esp_hid/CMakeFiles/__idf_esp_hid.dir
 
 # All Build rule for target.
-esp-idf/esp_hid/CMakeFiles/__idf_esp_hid.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/esp_hid/CMakeFiles/__idf_esp_hid.dir/all: esp-idf/bt/CMakeFiles/__idf_bt.dir/all
+esp-idf/esp_hid/CMakeFiles/__idf_esp_hid.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\esp_hid\CMakeFiles\__idf_esp_hid.dir\build.make esp-idf/esp_hid/CMakeFiles/__idf_esp_hid.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\esp_hid\CMakeFiles\__idf_esp_hid.dir\build.make esp-idf/esp_hid/CMakeFiles/__idf_esp_hid.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num=26 "Built target __idf_esp_hid"
@@ -5469,9 +5469,9 @@ esp-idf/esp_http_server/CMakeFiles/__idf_esp_http_server.dir/clean:
 # Target rules for target esp-idf/esp_https_ota/CMakeFiles/__idf_esp_https_ota.dir
 
 # All Build rule for target.
-esp-idf/esp_https_ota/CMakeFiles/__idf_esp_https_ota.dir/all: esp-idf/mbedtls/CMakeFiles/custom_bundle.dir/all
-esp-idf/esp_https_ota/CMakeFiles/__idf_esp_https_ota.dir/all: esp-idf/esp_system/CMakeFiles/sections.ld.in.dir/all
 esp-idf/esp_https_ota/CMakeFiles/__idf_esp_https_ota.dir/all: esp-idf/esp_system/CMakeFiles/memory.ld.dir/all
+esp-idf/esp_https_ota/CMakeFiles/__idf_esp_https_ota.dir/all: esp-idf/esp_system/CMakeFiles/sections.ld.in.dir/all
+esp-idf/esp_https_ota/CMakeFiles/__idf_esp_https_ota.dir/all: esp-idf/mbedtls/CMakeFiles/custom_bundle.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\esp_https_ota\CMakeFiles\__idf_esp_https_ota.dir\build.make esp-idf/esp_https_ota/CMakeFiles/__idf_esp_https_ota.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\esp_https_ota\CMakeFiles\__idf_esp_https_ota.dir\build.make esp-idf/esp_https_ota/CMakeFiles/__idf_esp_https_ota.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target __idf_esp_https_ota"
@@ -5575,10 +5575,10 @@ esp-idf/protobuf-c/CMakeFiles/__idf_protobuf-c.dir/clean:
 # Target rules for target esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir
 
 # All Build rule for target.
-esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all: esp-idf/bt/CMakeFiles/__idf_bt.dir/all
 esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all: esp-idf/console/CMakeFiles/__idf_console.dir/all
 esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all: esp-idf/protobuf-c/CMakeFiles/__idf_protobuf-c.dir/all
+esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\protocomm\CMakeFiles\__idf_protocomm.dir\build.make esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\protocomm\CMakeFiles\__idf_protocomm.dir\build.make esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num=66 "Built target __idf_protocomm"
@@ -5604,12 +5604,12 @@ esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/clean:
 # Target rules for target esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir
 
 # All Build rule for target.
-esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all: esp-idf/esp_https_server/CMakeFiles/__idf_esp_https_server.dir/all
 esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all: esp-idf/bt/CMakeFiles/__idf_bt.dir/all
 esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all: esp-idf/console/CMakeFiles/__idf_console.dir/all
 esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all: esp-idf/protobuf-c/CMakeFiles/__idf_protobuf-c.dir/all
 esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all: esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all
+esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\esp_local_ctrl\CMakeFiles\__idf_esp_local_ctrl.dir\build.make esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\esp_local_ctrl\CMakeFiles\__idf_esp_local_ctrl.dir\build.make esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num=33 "Built target __idf_esp_local_ctrl"
@@ -5687,8 +5687,8 @@ esp-idf/wear_levelling/CMakeFiles/__idf_wear_levelling.dir/clean:
 # Target rules for target esp-idf/fatfs/CMakeFiles/__idf_fatfs.dir
 
 # All Build rule for target.
-esp-idf/fatfs/CMakeFiles/__idf_fatfs.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/fatfs/CMakeFiles/__idf_fatfs.dir/all: esp-idf/wear_levelling/CMakeFiles/__idf_wear_levelling.dir/all
+esp-idf/fatfs/CMakeFiles/__idf_fatfs.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\fatfs\CMakeFiles\__idf_fatfs.dir\build.make esp-idf/fatfs/CMakeFiles/__idf_fatfs.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\fatfs\CMakeFiles\__idf_fatfs.dir\build.make esp-idf/fatfs/CMakeFiles/__idf_fatfs.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num=44 "Built target __idf_fatfs"
@@ -5922,12 +5922,12 @@ esp-idf/usb/CMakeFiles/__idf_usb.dir/clean:
 # Target rules for target esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir
 
 # All Build rule for target.
-esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all: esp-idf/bt/CMakeFiles/__idf_bt.dir/all
 esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all: esp-idf/console/CMakeFiles/__idf_console.dir/all
 esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all: esp-idf/protobuf-c/CMakeFiles/__idf_protobuf-c.dir/all
 esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all: esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all
 esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all: esp-idf/json/CMakeFiles/__idf_json.dir/all
+esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\wifi_provisioning\CMakeFiles\__idf_wifi_provisioning.dir\build.make esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\wifi_provisioning\CMakeFiles\__idf_wifi_provisioning.dir\build.make esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num=77 "Built target __idf_wifi_provisioning"
@@ -5953,7 +5953,6 @@ esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/clean:
 # Target rules for target esp-idf/main/CMakeFiles/__idf_main.dir
 
 # All Build rule for target.
-esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/app_trace/CMakeFiles/__idf_app_trace.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/esp_hid/CMakeFiles/__idf_esp_hid.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/esp_eth/CMakeFiles/__idf_esp_eth.dir/all
@@ -5963,28 +5962,29 @@ esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/unity/CMakeFiles/__idf_unity
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/cmock/CMakeFiles/__idf_cmock.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/console/CMakeFiles/__idf_console.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/esp_driver_cam/CMakeFiles/__idf_esp_driver_cam.dir/all
-esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/touch_element/CMakeFiles/__idf_touch_element.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/spiffs/CMakeFiles/__idf_spiffs.dir/all
+esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/touch_element/CMakeFiles/__idf_touch_element.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/wifi_provisioning/CMakeFiles/__idf_wifi_provisioning.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/usb/CMakeFiles/__idf_usb.dir/all
-esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
-esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/all
-esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/esp_lcd/CMakeFiles/__idf_esp_lcd.dir/all
+esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
+esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/protobuf-c/CMakeFiles/__idf_protobuf-c.dir/all
+esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/esp_lcd/CMakeFiles/__idf_esp_lcd.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/protocomm/CMakeFiles/__idf_protocomm.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/esp_local_ctrl/CMakeFiles/__idf_esp_local_ctrl.dir/all
-esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/wear_levelling/CMakeFiles/__idf_wear_levelling.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/espcoredump/CMakeFiles/__idf_espcoredump.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/fatfs/CMakeFiles/__idf_fatfs.dir/all
+esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/wear_levelling/CMakeFiles/__idf_wear_levelling.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/nvs_sec_provider/CMakeFiles/__idf_nvs_sec_provider.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/json/CMakeFiles/__idf_json.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/mqtt/CMakeFiles/__idf_mqtt.dir/all
-esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/perfmon/CMakeFiles/__idf_perfmon.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/rt/CMakeFiles/__idf_rt.dir/all
-esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all
+esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/perfmon/CMakeFiles/__idf_perfmon.dir/all
+esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/Wifi_module/CMakeFiles/__idf_Wifi_module.dir/all
 esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/app_msg/CMakeFiles/__idf_app_msg.dir/all
+esp-idf/main/CMakeFiles/__idf_main.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\main\CMakeFiles\__idf_main.dir\build.make esp-idf/main/CMakeFiles/__idf_main.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\main\CMakeFiles\__idf_main.dir\build.make esp-idf/main/CMakeFiles/__idf_main.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target __idf_main"
@@ -6036,9 +6036,9 @@ esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/clean:
 # Target rules for target esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir
 
 # All Build rule for target.
-esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/all: esp-idf/bt/CMakeFiles/__idf_bt.dir/all
 esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
+esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\Bluetooth_module\CMakeFiles\__idf_Bluetooth_module.dir\build.make esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\Bluetooth_module\CMakeFiles\__idf_Bluetooth_module.dir\build.make esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target __idf_Bluetooth_module"
@@ -6061,39 +6061,11 @@ esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/clean:
 .PHONY : esp-idf/Bluetooth_module/CMakeFiles/__idf_Bluetooth_module.dir/clean
 
 #=============================================================================
-# Target rules for target esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir
-
-# All Build rule for target.
-esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
-esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all: esp-idf/bt/CMakeFiles/__idf_bt.dir/all
-esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
-	$(MAKE) $(MAKESILENT) -f esp-idf\NimBLE_GATT_Server\CMakeFiles\__idf_NimBLE_GATT_Server.dir\build.make esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/depend
-	$(MAKE) $(MAKESILENT) -f esp-idf\NimBLE_GATT_Server\CMakeFiles\__idf_NimBLE_GATT_Server.dir\build.make esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target __idf_NimBLE_GATT_Server"
-.PHONY : esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
-
-# Build rule for subdir invocation for target.
-esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles 84
-	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles 0
-.PHONY : esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/rule
-
-# Convenience name for target.
-__idf_NimBLE_GATT_Server: esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/rule
-.PHONY : __idf_NimBLE_GATT_Server
-
-# clean rule for target.
-esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/clean:
-	$(MAKE) $(MAKESILENT) -f esp-idf\NimBLE_GATT_Server\CMakeFiles\__idf_NimBLE_GATT_Server.dir\build.make esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/clean
-.PHONY : esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/clean
-
-#=============================================================================
 # Target rules for target esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir
 
 # All Build rule for target.
-esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
+esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\Uart_module\CMakeFiles\__idf_Uart_module.dir\build.make esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\Uart_module\CMakeFiles\__idf_Uart_module.dir\build.make esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target __idf_Uart_module"
@@ -6114,6 +6086,35 @@ __idf_Uart_module: esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/rule
 esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/clean:
 	$(MAKE) $(MAKESILENT) -f esp-idf\Uart_module\CMakeFiles\__idf_Uart_module.dir\build.make esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/clean
 .PHONY : esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/clean
+
+#=============================================================================
+# Target rules for target esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir
+
+# All Build rule for target.
+esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all: esp-idf/bt/CMakeFiles/__idf_bt.dir/all
+esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
+esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all: esp-idf/Uart_module/CMakeFiles/__idf_Uart_module.dir/all
+esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
+	$(MAKE) $(MAKESILENT) -f esp-idf\NimBLE_GATT_Server\CMakeFiles\__idf_NimBLE_GATT_Server.dir\build.make esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/depend
+	$(MAKE) $(MAKESILENT) -f esp-idf\NimBLE_GATT_Server\CMakeFiles\__idf_NimBLE_GATT_Server.dir\build.make esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target __idf_NimBLE_GATT_Server"
+.PHONY : esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
+
+# Build rule for subdir invocation for target.
+esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles 84
+	$(MAKE) $(MAKESILENT) -f CMakeFiles\Makefile2 esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles 0
+.PHONY : esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/rule
+
+# Convenience name for target.
+__idf_NimBLE_GATT_Server: esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/rule
+.PHONY : __idf_NimBLE_GATT_Server
+
+# clean rule for target.
+esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/clean:
+	$(MAKE) $(MAKESILENT) -f esp-idf\NimBLE_GATT_Server\CMakeFiles\__idf_NimBLE_GATT_Server.dir\build.make esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/clean
+.PHONY : esp-idf/NimBLE_GATT_Server/CMakeFiles/__idf_NimBLE_GATT_Server.dir/clean
 
 #=============================================================================
 # Target rules for target esp-idf/Wifi_module/CMakeFiles/__idf_Wifi_module.dir
@@ -6145,8 +6146,8 @@ esp-idf/Wifi_module/CMakeFiles/__idf_Wifi_module.dir/clean:
 # Target rules for target esp-idf/app_msg/CMakeFiles/__idf_app_msg.dir
 
 # All Build rule for target.
-esp-idf/app_msg/CMakeFiles/__idf_app_msg.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 esp-idf/app_msg/CMakeFiles/__idf_app_msg.dir/all: esp-idf/Task_manager/CMakeFiles/__idf_Task_manager.dir/all
+esp-idf/app_msg/CMakeFiles/__idf_app_msg.dir/all: esp-idf/xtensa/CMakeFiles/__idf_xtensa.dir/all
 	$(MAKE) $(MAKESILENT) -f esp-idf\app_msg\CMakeFiles\__idf_app_msg.dir\build.make esp-idf/app_msg/CMakeFiles/__idf_app_msg.dir/depend
 	$(MAKE) $(MAKESILENT) -f esp-idf\app_msg\CMakeFiles\__idf_app_msg.dir\build.make esp-idf/app_msg/CMakeFiles/__idf_app_msg.dir/build
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=D:\Micpython-Project\test-1\main\wifi_eap_fast\build\CMakeFiles --progress-num= "Built target __idf_app_msg"

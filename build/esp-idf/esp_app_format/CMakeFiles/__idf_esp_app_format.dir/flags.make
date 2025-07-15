@@ -8,5 +8,5 @@ C_INCLUDES = -ID:\Micpython-Project\test-1\main\wifi_eap_fast\build\config -ID:\
 
 C_FLAGS = -mlongcalls  -fno-builtin-memcpy -fno-builtin-memset -fno-builtin-bzero -fno-builtin-stpcpy -fno-builtin-strncpy -fdiagnostics-color=always -ffunction-sections -fdata-sections -Wall -Werror=all -Wno-error=unused-function -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=deprecated-declarations -Wextra -Wno-error=extra -Wno-unused-parameter -Wno-sign-compare -Wno-enum-conversion -gdwarf-4 -ggdb -Og -fno-shrink-wrap -fmacro-prefix-map=D:/Micpython-Project/test-1/main/wifi_eap_fast=. -fmacro-prefix-map=D:/ESP-IDF/v5.4.1/esp-idf=/IDF -fstrict-volatile-bitfields -fno-jump-tables -fno-tree-switch-conversion -std=gnu17 -Wno-old-style-declaration
 
-# Custom defines: esp-idf/esp_app_format/CMakeFiles/__idf_esp_app_format.dir/esp_app_desc.c.obj_DEFINES = PROJECT_VER="ba61ce0-dirty"; PROJECT_NAME="wifi_eap_fast"
+# Custom defines: esp-idf/esp_app_format/CMakeFiles/__idf_esp_app_format.dir/esp_app_desc.c.obj_DEFINES = PROJECT_VER="3160418-dirty"; PROJECT_NAME="wifi_eap_fast"
 

@@ -184,8 +184,8 @@ wifi_eap_fast.elf: esp-idf/wifi_provisioning/libwifi_provisioning.a
 wifi_eap_fast.elf: esp-idf/main/libmain.a
 wifi_eap_fast.elf: esp-idf/Task_manager/libTask_manager.a
 wifi_eap_fast.elf: esp-idf/Bluetooth_module/libBluetooth_module.a
-wifi_eap_fast.elf: esp-idf/NimBLE_GATT_Server/libNimBLE_GATT_Server.a
 wifi_eap_fast.elf: esp-idf/Uart_module/libUart_module.a
+wifi_eap_fast.elf: esp-idf/NimBLE_GATT_Server/libNimBLE_GATT_Server.a
 wifi_eap_fast.elf: esp-idf/Wifi_module/libWifi_module.a
 wifi_eap_fast.elf: esp-idf/app_msg/libapp_msg.a
 wifi_eap_fast.elf: esp-idf/app_trace/libapp_trace.a
@@ -214,6 +214,7 @@ wifi_eap_fast.elf: esp-idf/console/libconsole.a
 wifi_eap_fast.elf: esp-idf/protobuf-c/libprotobuf-c.a
 wifi_eap_fast.elf: esp-idf/json/libjson.a
 wifi_eap_fast.elf: esp-idf/bt/libbt.a
+wifi_eap_fast.elf: esp-idf/Uart_module/libUart_module.a
 wifi_eap_fast.elf: esp-idf/Task_manager/libTask_manager.a
 wifi_eap_fast.elf: esp-idf/xtensa/libxtensa.a
 wifi_eap_fast.elf: esp-idf/esp_driver_gpio/libesp_driver_gpio.a

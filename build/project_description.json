@@ -1,7 +1,7 @@
 {
     "version":            "1.2",
     "project_name":       "wifi_eap_fast",
-    "project_version":    "ba61ce0-dirty",
+    "project_version":    "3160418-dirty",
     "project_path":       "D:/Micpython-Project/test-1/main/wifi_eap_fast",
     "idf_path":           "D:/ESP-IDF/v5.4.1/esp-idf",
     "build_dir":          "D:/Micpython-Project/test-1/main/wifi_eap_fast/build",
