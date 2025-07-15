@@ -9,6 +9,8 @@
 #include "gatt_svc.h"
 #include "heart_rate.h"
 
+#include <ctrl_protocol.h> // Include the ctrl_protocol header for ctrl_protocol functions
+
 /* Private function declarations */
 inline static void format_addr(char *addr_str, uint8_t addr[]);
 static void print_conn_desc(struct ble_gap_conn_desc *desc);
@@ -428,13 +430,15 @@ void ble_task(void) {
     /* NimBLE host configuration initialization */
     nimble_host_config_init();
     ble_queue_init();
+
+    ctrl_protocol_init(); // Initialize the control protocol
     
     /* Start NimBLE host task thread and return */
     xTaskCreate(nimble_host_task, "NimBLE Host", 4*1024, NULL, 5, NULL);
     // xTaskCreate(heart_rate_task, "Heart Rate", 4*1024, NULL, 5, NULL);
     xTaskCreate(ble_send_task, "ble_send_task", 4096, NULL, 5, NULL);
     xTaskCreate(ble_receive_task, "ble_receive_task", 4096, NULL, 5, NULL);
-    xTaskCreate(uart_send_task, "uart_send_task", 4096, NULL, 5, NULL);
+    // xTaskCreate(uart_send_task, "uart_send_task", 4096, NULL, 5, NULL);
 
 
     return;

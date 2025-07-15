@@ -1,2 +1,0 @@
-D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ar.exe qc libesp_security.a CMakeFiles/__idf_esp_security.dir/src/init.c.obj CMakeFiles/__idf_esp_security.dir/src/esp_hmac.c.obj CMakeFiles/__idf_esp_security.dir/src/esp_ds.c.obj CMakeFiles/__idf_esp_security.dir/src/esp_crypto_lock.c.obj
-D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ranlib.exe libesp_security.a

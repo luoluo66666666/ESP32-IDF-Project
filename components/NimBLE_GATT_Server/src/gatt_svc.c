@@ -7,7 +7,9 @@
 #include "gatt_svc.h"
 #include "common.h"
 #include "heart_rate.h"
-#include "uart_module.h"
+// #include "uart_module.h"
+
+#include "ctrl_protocol.h" // Include the ctrl_protocol header for ctrl_protocol functions
 
 /* 创建发送和接收队列 */
 #define QUEUE_LENGTH 10
@@ -457,36 +459,48 @@ void ble_send_task(void *param) {
 
 
 // 接收任务：从接收队列读取数据，处理后回环到发送队列实现回环发送
+// 接收任务：从接收队列读取数据，处理后生成响应并发送回客户端
 void ble_receive_task(void *param) {
     ble_data_t data;
-    while (1) {
-        // 阻塞等待接收队列数据
-        if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE) {
-            ESP_LOGI(TAG, "Received data processed (loopback): %.*s", (int)data.len, data.buf);
+    char response[QUEUE_ITEM_SIZE];
 
-            // 将数据直接放入发送队列，实现数据回环发送
-            if (ble_tx_queue != NULL) {
-                if (xQueueSend(ble_tx_queue, &data, 10 / portTICK_PERIOD_MS) != pdPASS) {
-                    ESP_LOGW(TAG, "Send queue full, loopback failed");
+    while (1) {
+        // 从接收队列读取数据
+        if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE) {
+            ESP_LOGI(TAG, "Received data: %.*s", (int)data.len, data.buf);
+
+            // 调用协议处理函数，生成响应
+            memset(response, 0, sizeof(response));
+            ctrl_protocol((char *)data.buf, response, sizeof(response));
+
+            // 如果响应不为空，则放入发送队列
+            if (strlen(response) > 0 && ble_tx_queue != NULL) {
+                ble_data_t tx_data = {0};
+                strncpy((char *)tx_data.buf, response, QUEUE_ITEM_SIZE - 1);
+                tx_data.len = strnlen((char *)tx_data.buf, QUEUE_ITEM_SIZE);
+
+                if (xQueueSend(ble_tx_queue, &tx_data, 10 / portTICK_PERIOD_MS) != pdPASS) {
+                    ESP_LOGW(TAG, "Send queue full, response dropped");
                 } else {
-                    ESP_LOGI(TAG, "Loopback data queued for sending");
+                    ESP_LOGI(TAG, "Response queued for sending: %s", tx_data.buf);
                 }
             }
         }
     }
-    vTaskDelete(NULL); // 任务退出（一般不会执行到这里）
+
+    vTaskDelete(NULL);
 }
 
 
 
 
 
-void uart_send_task(void *param) {
-    ble_data_t data;
-    while (1) {
-        if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE) {
-            uart_write_bytes(UART_NUM_0, (const char *)data.buf, data.len);
-            ESP_LOGI(TAG, "Sent to UART: %.*s", (int)data.len, data.buf);
-        }
-    }
-}
+// void uart_send_task(void *param) {
+//     ble_data_t data;
+//     while (1) {
+//         if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE) {
+//             uart_write_bytes(UART_NUM_0, (const char *)data.buf, data.len);
+//             ESP_LOGI(TAG, "Sent to UART: %.*s", (int)data.len, data.buf);
+//         }
+//     }
+// }

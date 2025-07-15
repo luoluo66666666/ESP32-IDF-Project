@@ -11,5 +11,5 @@ idf_component_register(
         driver 
         Task_manager 
         bt
-        Uart_module
+        ctrl_protocol
 )

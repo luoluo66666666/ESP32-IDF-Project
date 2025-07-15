@@ -1915,7 +1915,7 @@ rule C_STATIC_LIBRARY_LINKER____idf_Bluetooth_module_
 #############################################
 # Rule for compiling C files.
 
-rule C_COMPILER____idf_Uart_module_unscanned_
+rule C_COMPILER____idf_ctrl_protocol_unscanned_
   depfile = $DEP_FILE
   deps = gcc
   command = ccache ${LAUNCHER}${CODE_CHECK}D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
@@ -1925,7 +1925,7 @@ rule C_COMPILER____idf_Uart_module_unscanned_
 #############################################
 # Rule for linking C static library.
 
-rule C_STATIC_LIBRARY_LINKER____idf_Uart_module_
+rule C_STATIC_LIBRARY_LINKER____idf_ctrl_protocol_
   command = C:\WINDOWS\system32\cmd.exe /C "$PRE_LINK && D:\ESP.SSIF\tools\cmake\3.30.2\bin\cmake.exe -E rm -f $TARGET_FILE && D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ar.exe qc $TARGET_FILE $LINK_FLAGS $in && D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ranlib.exe $TARGET_FILE && $POST_BUILD"
   description = Linking C static library $TARGET_FILE
   restat = $RESTAT
@@ -1945,6 +1945,25 @@ rule C_COMPILER____idf_NimBLE_GATT_Server_unscanned_
 # Rule for linking C static library.
 
 rule C_STATIC_LIBRARY_LINKER____idf_NimBLE_GATT_Server_
+  command = C:\WINDOWS\system32\cmd.exe /C "$PRE_LINK && D:\ESP.SSIF\tools\cmake\3.30.2\bin\cmake.exe -E rm -f $TARGET_FILE && D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ar.exe qc $TARGET_FILE $LINK_FLAGS $in && D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ranlib.exe $TARGET_FILE && $POST_BUILD"
+  description = Linking C static library $TARGET_FILE
+  restat = $RESTAT
+
+
+#############################################
+# Rule for compiling C files.
+
+rule C_COMPILER____idf_Uart_module_unscanned_
+  depfile = $DEP_FILE
+  deps = gcc
+  command = ccache ${LAUNCHER}${CODE_CHECK}D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-gcc.exe $DEFINES $INCLUDES $FLAGS -MD -MT $out -MF $DEP_FILE -o $out -c $in
+  description = Building C object $out
+
+
+#############################################
+# Rule for linking C static library.
+
+rule C_STATIC_LIBRARY_LINKER____idf_Uart_module_
   command = C:\WINDOWS\system32\cmd.exe /C "$PRE_LINK && D:\ESP.SSIF\tools\cmake\3.30.2\bin\cmake.exe -E rm -f $TARGET_FILE && D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ar.exe qc $TARGET_FILE $LINK_FLAGS $in && D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ranlib.exe $TARGET_FILE && $POST_BUILD"
   description = Linking C static library $TARGET_FILE
   restat = $RESTAT
