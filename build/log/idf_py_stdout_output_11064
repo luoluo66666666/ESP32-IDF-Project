@@ -1,0 +1,9 @@
+[1/1] C:\WINDOWS\system32\cmd.exe /C "cd /D D:\Micpython-Project\test-1\main\wifi_eap_fast\build\esp-idf\partition_table && D:\ESP.SSIF\tools\cmake\3.30.2\bin\cmake.exe -E echo "Partition table binary generated. Contents:" && D:\ESP.SSIF\tools\cmake\3.30.2\bin\cmake.exe -E echo ******************************************************************************* && d:\ESP.SSIF\python_env\idf5.4_py3.11_env\Scripts\python.exe D:/ESP-IDF/v5.4.1/esp-idf/components/partition_table/gen_esp32part.py -q --offset 0x8000 --flash-size 2MB -- D:/Micpython-Project/test-1/main/wifi_eap_fast/build/partition_table/partition-table.bin && D:\ESP.SSIF\tools\cmake\3.30.2\bin\cmake.exe -E echo *******************************************************************************"
+Partition table binary generated. Contents:
+*******************************************************************************
+# ESP-IDF Partition Table
+# Name, Type, SubType, Offset, Size, Flags
+nvs,data,nvs,0x9000,24K,
+phy_init,data,phy,0xf000,4K,
+factory,app,factory,0x10000,1M,
+*******************************************************************************
