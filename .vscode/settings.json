@@ -47,6 +47,7 @@
     "ranges": "c",
     "span": "c",
     "compare": "c",
-    "cstdint": "c"
+    "cstdint": "c",
+    "mode_ctrl.h": "c"
   }
 }

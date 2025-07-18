@@ -87,6 +87,7 @@ $<TARGET_FILE:__idf_wifi_provisioning>
 $<TARGET_FILE:__idf_main>
 $<TARGET_FILE:__idf_Task_manager>
 $<TARGET_FILE:__idf_Bluetooth_module>
+$<TARGET_FILE:__idf_mode_ctrl>
 $<TARGET_FILE:__idf_ctrl_protocol>
 $<TARGET_FILE:__idf_NimBLE_GATT_Server>
 $<TARGET_FILE:__idf_Uart_module>

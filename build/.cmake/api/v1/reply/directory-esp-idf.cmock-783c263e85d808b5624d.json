@@ -1,0 +1,14 @@
+{
+	"backtraceGraph" : 
+	{
+		"commands" : [],
+		"files" : [],
+		"nodes" : []
+	},
+	"installers" : [],
+	"paths" : 
+	{
+		"build" : "esp-idf/cmock",
+		"source" : "D:/ESP-IDF/v5.4.1/esp-idf/components/cmock"
+	}
+}

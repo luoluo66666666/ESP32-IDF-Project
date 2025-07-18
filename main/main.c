@@ -10,6 +10,7 @@
 
 void app_main(void)
 {
+    
     Wifi_start();  // 启动wifi模块
 
     // ESP_LOGI(TAG, "App main start");
@@ -25,8 +26,6 @@ void app_main(void)
     // nimble_port_freertos_init(ble_host_task);
     // uart_module_start();  // 启动串口模块
     ble_task();  // 启动BLE任务
-
-
 
 }
 

@@ -18,13 +18,15 @@
 static QueueHandle_t ble_tx_queue = NULL;
 static QueueHandle_t ble_rx_queue = NULL;
 
-typedef struct {
+typedef struct
+{
     uint8_t buf[QUEUE_ITEM_SIZE];
     size_t len;
 } ble_data_t;
 
 /* 初始化队列 */
-void ble_queue_init(void) {
+void ble_queue_init(void)
+{
     ble_tx_queue = xQueueCreate(QUEUE_LENGTH, sizeof(ble_data_t));
     ble_rx_queue = xQueueCreate(QUEUE_LENGTH, sizeof(ble_data_t));
 }
@@ -54,7 +56,6 @@ static const ble_uuid128_t led_chr_uuid =
     BLE_UUID128_INIT(0x23, 0xd1, 0xbc, 0xea, 0x5f, 0x78, 0x23, 0x15, 0xde, 0xef,
                      0x12, 0x12, 0x25, 0x15, 0x00, 0x00);
 
-
 /*-------------------Private Define-----------------------*/
 // 自定义服务 UUID（128位）
 static const ble_uuid128_t my_custom_svc_uuid =
@@ -71,8 +72,6 @@ static uint16_t my_custom_chr_val_handle;
 
 static uint16_t g_conn_handle = 0;  // 保存连接句柄
 static bool notify_enabled = false; // 客户端是否已启用 notify
-
-
 
 /* GATT services table */
 static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
@@ -122,27 +121,33 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
 
 /* Private functions */
 static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
-                                 struct ble_gatt_access_ctxt *ctxt, void *arg) {
+                                 struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
     /* Local variables */
     int rc;
 
     /* Handle access events */
     /* Note: Heart rate characteristic is read only */
-    switch (ctxt->op) {
+    switch (ctxt->op)
+    {
 
     /* Read characteristic event */
     case BLE_GATT_ACCESS_OP_READ_CHR:
         /* Verify connection handle */
-        if (conn_handle != BLE_HS_CONN_HANDLE_NONE) {
+        if (conn_handle != BLE_HS_CONN_HANDLE_NONE)
+        {
             ESP_LOGI(TAG, "characteristic read; conn_handle=%d attr_handle=%d",
                      conn_handle, attr_handle);
-        } else {
+        }
+        else
+        {
             ESP_LOGI(TAG, "characteristic read by nimble stack; attr_handle=%d",
                      attr_handle);
         }
 
         /* Verify attribute handle */
-        if (attr_handle == heart_rate_chr_val_handle) {
+        if (attr_handle == heart_rate_chr_val_handle)
+        {
             /* Update access buffer value */
             heart_rate_chr_val[1] = get_heart_rate();
             rc = os_mbuf_append(ctxt->om, &heart_rate_chr_val,
@@ -216,35 +221,41 @@ error:
 //     return BLE_ATT_ERR_UNLIKELY;
 // }
 
-
 static int led_chr_access(uint16_t conn_handle, uint16_t attr_handle,
-                          struct ble_gatt_access_ctxt *ctxt, void *arg) {
+                          struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
     /* Local variables */
     int rc;
 
     /* Handle access events */
     /* Note: LED characteristic is write only */
-    switch (ctxt->op) {
+    switch (ctxt->op)
+    {
 
     /* Write characteristic event */
-    case BLE_GATT_ACCESS_OP_WRITE_CHR: 
+    case BLE_GATT_ACCESS_OP_WRITE_CHR:
     {
         int len = OS_MBUF_PKTLEN(ctxt->om);
-        if (len > QUEUE_ITEM_SIZE) len = QUEUE_ITEM_SIZE;
+        if (len > QUEUE_ITEM_SIZE)
+            len = QUEUE_ITEM_SIZE;
 
         ble_data_t buf = {0};
         os_mbuf_copydata(ctxt->om, 0, len, buf.buf);
         buf.len = len;
 
-        if (ble_rx_queue != NULL) {
-            if (xQueueSendFromISR(ble_rx_queue, &buf, NULL) != pdTRUE) {
+        if (ble_rx_queue != NULL)
+        {
+            if (xQueueSendFromISR(ble_rx_queue, &buf, NULL) != pdTRUE)
+            {
                 ESP_LOGW(TAG, "RX queue full, data lost");
-            } else {
+            }
+            else
+            {
                 ESP_LOGI(TAG, "Data queued in RX queue: %.*s", len, buf.buf);
             }
         }
 
-    return 0;
+        return 0;
     }
         /* Unknown event */
     default:
@@ -259,8 +270,10 @@ error:
 }
 
 /* Public functions */
-void send_heart_rate_indication(void) {
-    if (heart_rate_ind_status && heart_rate_chr_conn_handle_inited) {
+void send_heart_rate_indication(void)
+{
+    if (heart_rate_ind_status && heart_rate_chr_conn_handle_inited)
+    {
         ble_gatts_indicate(heart_rate_chr_conn_handle,
                            heart_rate_chr_val_handle);
         ESP_LOGI(TAG, "heart rate indication sent!");
@@ -273,12 +286,14 @@ void send_heart_rate_indication(void) {
  *      - Characteristic register event
  *      - Descriptor register event
  */
-void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg) {
+void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
+{
     /* Local variables */
     char buf[BLE_UUID_STR_LEN];
 
     /* Handle GATT attributes register events */
-    switch (ctxt->op) {
+    switch (ctxt->op)
+    {
 
     /* Service register event */
     case BLE_GATT_REGISTER_OP_SVC:
@@ -334,18 +349,22 @@ void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg) {
 //     }
 // }
 
-
 // 订阅回调中，更新连接状态和订阅状态（cur_notify 和 cur_indicate）
-void gatt_svr_subscribe_cb(struct ble_gap_event *event) {
-    if (event->subscribe.conn_handle != BLE_HS_CONN_HANDLE_NONE) {
+void gatt_svr_subscribe_cb(struct ble_gap_event *event)
+{
+    if (event->subscribe.conn_handle != BLE_HS_CONN_HANDLE_NONE)
+    {
         ESP_LOGI(TAG, "subscribe event; conn_handle=%d attr_handle=%d",
                  event->subscribe.conn_handle, event->subscribe.attr_handle);
-    } else {
+    }
+    else
+    {
         ESP_LOGI(TAG, "subscribe by nimble stack; attr_handle=%d",
                  event->subscribe.attr_handle);
     }
 
-    if (event->subscribe.attr_handle == heart_rate_chr_val_handle) {
+    if (event->subscribe.attr_handle == heart_rate_chr_val_handle)
+    {
         heart_rate_chr_conn_handle = event->subscribe.conn_handle;
         heart_rate_chr_conn_handle_inited = true;
         // 这里合并通知和指示状态判断
@@ -355,15 +374,14 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event) {
     }
 }
 
-
-
 /*
  *  GATT server initialization
  *      1. Initialize GATT service
  *      2. Update NimBLE host GATT services counter
  *      3. Add GATT services to server
  */
-int gatt_svc_init(void) {
+int gatt_svc_init(void)
+{
     /* Local variables */
     int rc;
 
@@ -372,53 +390,61 @@ int gatt_svc_init(void) {
 
     /* 2. Update GATT services counter */
     rc = ble_gatts_count_cfg(gatt_svr_svcs);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         return rc;
     }
 
     /* 3. Add GATT services */
     rc = ble_gatts_add_svcs(gatt_svr_svcs);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         return rc;
     }
 
     return 0;
 }
 
-
 // 处理BLE读写请求的回调函数
 static int data_access(uint16_t conn_handle, uint16_t attr_handle,
-                       struct ble_gatt_access_ctxt *ctxt, void *arg) {
+                       struct ble_gatt_access_ctxt *ctxt, void *arg)
+{
     int rc;
 
-    switch (ctxt->op) {
+    switch (ctxt->op)
+    {
     case BLE_GATT_ACCESS_OP_READ_CHR:
         // 暂时不支持读取操作，返回错误码
         ESP_LOGW(TAG, "Read operation not supported");
         return BLE_ATT_ERR_UNLIKELY;
 
     case BLE_GATT_ACCESS_OP_WRITE_CHR:
+    {
+        // 获取写入数据长度，防止超过队列项大小
+        int len = OS_MBUF_PKTLEN(ctxt->om);
+        if (len > QUEUE_ITEM_SIZE)
+            len = QUEUE_ITEM_SIZE;
+
+        // 定义数据结构存放写入数据
+        ble_data_t data = {0};
+        // 从mbuf复制数据到缓冲区
+        os_mbuf_copydata(ctxt->om, 0, len, data.buf);
+        data.len = len;
+
+        // 如果接收队列已初始化，尝试写入数据
+        if (ble_rx_queue != NULL)
         {
-            // 获取写入数据长度，防止超过队列项大小
-            int len = OS_MBUF_PKTLEN(ctxt->om);
-            if (len > QUEUE_ITEM_SIZE) len = QUEUE_ITEM_SIZE;
-
-            // 定义数据结构存放写入数据
-            ble_data_t data = {0};
-            // 从mbuf复制数据到缓冲区
-            os_mbuf_copydata(ctxt->om, 0, len, data.buf);
-            data.len = len;
-
-            // 如果接收队列已初始化，尝试写入数据
-            if (ble_rx_queue != NULL) {
-                if (xQueueSend(ble_rx_queue, &data, 0) != pdPASS) {
-                    ESP_LOGW(TAG, "Failed to write data to RX queue");
-                } else {
-                    ESP_LOGI(TAG, "Data written to RX queue: %.*s", len, data.buf);
-                }
+            if (xQueueSend(ble_rx_queue, &data, 0) != pdPASS)
+            {
+                ESP_LOGW(TAG, "Failed to write data to RX queue");
             }
-            return 0; // 写入成功
+            else
+            {
+                ESP_LOGI(TAG, "Data written to RX queue: %.*s", len, data.buf);
+            }
         }
+        return 0; // 写入成功
+    }
 
     default:
         // 未知操作，打印错误并返回错误码
@@ -427,30 +453,39 @@ static int data_access(uint16_t conn_handle, uint16_t attr_handle,
     }
 }
 
-
 // 发送任务：从发送队列中读取数据，并通过BLE通知发送给客户端
-void ble_send_task(void *param) {
+void ble_send_task(void *param)
+{
     ble_data_t data;
-    while (1) {
+    while (1)
+    {
         // 判断是否已初始化连接句柄且通知已启用
-        if (heart_rate_chr_conn_handle_inited && heart_rate_ind_status) {
+        if (heart_rate_chr_conn_handle_inited && heart_rate_ind_status)
+        {
             // 阻塞等待发送队列数据
-            if (xQueueReceive(ble_tx_queue, &data, portMAX_DELAY) == pdTRUE) {
+            if (xQueueReceive(ble_tx_queue, &data, portMAX_DELAY) == pdTRUE)
+            {
                 // 创建mbuf结构存放发送数据
                 struct os_mbuf *om = ble_hs_mbuf_from_flat(data.buf, data.len);
-                if (om == NULL) {
+                if (om == NULL)
+                {
                     ESP_LOGE(TAG, "Failed to allocate mbuf");
                     continue;
                 }
                 // 发送通知
                 int rc = ble_gatts_notify_custom(heart_rate_chr_conn_handle, heart_rate_chr_val_handle, om);
-                if (rc != 0) {
+                if (rc != 0)
+                {
                     ESP_LOGE(TAG, "Notify send failed, rc=%d", rc);
-                } else {
+                }
+                else
+                {
                     ESP_LOGI(TAG, "Notify sent: %.*s", (int)data.len, data.buf);
                 }
             }
-        } else {
+        }
+        else
+        {
             // 未初始化时，任务延时等待
             vTaskDelay(pdMS_TO_TICKS(100));
         }
@@ -458,15 +493,17 @@ void ble_send_task(void *param) {
 }
 
 
-// 接收任务：从接收队列读取数据，处理后回环到发送队列实现回环发送
 // 接收任务：从接收队列读取数据，处理后生成响应并发送回客户端
-void ble_receive_task(void *param) {
+void ble_receive_task(void *param)
+{
     ble_data_t data;
     char response[QUEUE_ITEM_SIZE];
 
-    while (1) {
+    while (1)
+    {
         // 从接收队列读取数据
-        if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE) {
+        if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE)
+        {
             ESP_LOGI(TAG, "Received data: %.*s", (int)data.len, data.buf);
 
             // 调用协议处理函数，生成响应
@@ -474,14 +511,18 @@ void ble_receive_task(void *param) {
             ctrl_protocol((char *)data.buf, response, sizeof(response));
 
             // 如果响应不为空，则放入发送队列
-            if (strlen(response) > 0 && ble_tx_queue != NULL) {
+            if (strlen(response) > 0 && ble_tx_queue != NULL)
+            {
                 ble_data_t tx_data = {0};
                 strncpy((char *)tx_data.buf, response, QUEUE_ITEM_SIZE - 1);
                 tx_data.len = strnlen((char *)tx_data.buf, QUEUE_ITEM_SIZE);
 
-                if (xQueueSend(ble_tx_queue, &tx_data, 10 / portTICK_PERIOD_MS) != pdPASS) {
+                if (xQueueSend(ble_tx_queue, &tx_data, 10 / portTICK_PERIOD_MS) != pdPASS)
+                {
                     ESP_LOGW(TAG, "Send queue full, response dropped");
-                } else {
+                }
+                else
+                {
                     ESP_LOGI(TAG, "Response queued for sending: %s", tx_data.buf);
                 }
             }
@@ -490,10 +531,6 @@ void ble_receive_task(void *param) {
 
     vTaskDelete(NULL);
 }
-
-
-
-
 
 // void uart_send_task(void *param) {
 //     ble_data_t data;
