@@ -1,4 +1,4 @@
-#include "ctrl_protocol.h"
+// #include "ctrl_protocol.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -27,7 +27,13 @@ static EventGroupHandle_t e_ctrl_protocol; // 事件组句柄，用于管理运�
 
 const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
 
-// 控制协议模块初始化函数，创建事件组并初始化默认状态
+/**
+ * @description: 函数描述
+ * @Author: Luo
+ * @Date: 2025-07-21 10:05:28
+ * @LastEditTime: 
+ * @LastEditors: Luo
+ */
 void ctrl_protocol_init(void)
 {
     e_ctrl_protocol = xEventGroupCreate(); // 创建事件组
@@ -75,6 +81,8 @@ int get_fault(void)
     }
     return 0;
 }
+
+
 
 // 设置运行状态，置RUN_BIT位；如果处于故障状态则打印错误并返回-1
 int set_run(void)

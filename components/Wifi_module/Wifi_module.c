@@ -1,34 +1,37 @@
-#include <string.h>
-#include <stdio.h>
-#include <sys/param.h>
+#include "Wifi_module.h" // 包含自定义的WiFi模块头文件
+#include "driver/gpio.h"
+#include "driver/uart.h"
+#include "esp_event.h"
+#include "esp_log.h"
+#include "esp_mac.h"
+#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
-#include "esp_wifi.h"
-#include "esp_log.h"
-#include "esp_event.h"
-#include "nvs_flash.h"
-#include "esp_mac.h"
-#include "driver/uart.h"
-#include "lwip/sockets.h"
 #include "lwip/netdb.h"
-#include "Wifi_module.h" // 包含自定义的WiFi模块头文件
-#include "driver/gpio.h"
+#include "lwip/sockets.h"
+#include "nvs_flash.h"
+#include <stdio.h>
+#include <string.h>
+#include <sys/param.h>
 
 #define TAG "wifi_module" // 日志标签，用于打印日志时区分模块
 
 #define WIFI_CONNECTED_BIT BIT0 // WiFi连接状态事件标志位
 // 全局变量声明
-static EventGroupHandle_t wifi_event_group;        // WiFi事件组句柄，用于同步WiFi连接状态
-static wifi_mode_t current_mode = WIFI_MODE_APSTA; // 当前WiFi工作模式，默认AP+STA共存
+static EventGroupHandle_t
+    wifi_event_group; // WiFi事件组句柄，用于同步WiFi连接状态
+static wifi_mode_t current_mode =
+    WIFI_MODE_APSTA; // 当前WiFi工作模式，默认AP+STA共存
 
 static wifi_config_t sta_config = {0}; // STA模式配置结构体，初始化为全0
 static wifi_config_t ap_config = {0};  // AP模式配置结构体，初始化为全0
 
 // TCP服务器相关变量
-static int tcp_server_sock = -1;                   // TCP服务器监听socket描述符，-1表示未创建
-static int tcp_port = 1234;                        // TCP服务器监听端口，默认1234
-static TaskHandle_t tcp_server_task_handle = NULL; // TCP服务器任务句柄，用于管理TCP服务任务
+static int tcp_server_sock = -1; // TCP服务器监听socket描述符，-1表示未创建
+static int tcp_port = 1234;      // TCP服务器监听端口，默认1234
+static TaskHandle_t tcp_server_task_handle =
+    NULL; // TCP服务器任务句柄，用于管理TCP服务任务
 
 // UART相关变量
 #define EX_UART_NUM UART_NUM_0 // 串口号，这里使用UART0
@@ -91,11 +94,11 @@ void wifi_event_handler(void *arg, esp_event_base_t event_base,
     }
 }
 
-/************************** 启动WiFi模式（AP/STA/APSTA） **************************/
+/************************** 启动WiFi模式（AP/STA/APSTA）
+ * **************************/
 static void start_wifi_mode(wifi_mode_t mode)
 {
-    ESP_LOGI(TAG, "Starting WiFi mode %s%s%s",
-             (mode & WIFI_MODE_AP) ? "AP " : "",
+    ESP_LOGI(TAG, "Starting WiFi mode %s%s%s", (mode & WIFI_MODE_AP) ? "AP " : "",
              (mode & WIFI_MODE_STA) ? "STA " : "",
              (!(mode & WIFI_MODE_AP) && !(mode & WIFI_MODE_STA)) ? "NONE" : "");
 
@@ -142,7 +145,8 @@ static void tcp_server_task(void *pvParameters)
     server_addr.sin_port = htons(tcp_port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(tcp_server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0)
+    if (bind(tcp_server_sock, (struct sockaddr *)&server_addr,
+             sizeof(server_addr)) != 0)
     {
         ESP_LOGE(TAG, "Socket bind failed: errno %d", errno);
         close(tcp_server_sock);
@@ -165,7 +169,8 @@ static void tcp_server_task(void *pvParameters)
     while (1)
     {
         ESP_LOGI(TAG, "Waiting for a client to connect...");
-        client_sock = accept(tcp_server_sock, (struct sockaddr *)&client_addr, &client_addr_len);
+        client_sock = accept(tcp_server_sock, (struct sockaddr *)&client_addr,
+                             &client_addr_len);
         if (client_sock < 0)
         {
             ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
@@ -185,7 +190,8 @@ static void tcp_server_task(void *pvParameters)
             int len = recv(client_sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
             if (len < 0)
             {
-                ESP_LOGE(TAG, "recv failed from %s:%d, errno %d", client_ip, client_port, errno);
+                ESP_LOGE(TAG, "recv failed from %s:%d, errno %d", client_ip,
+                         client_port, errno);
                 break;
             }
             else if (len == 0)
@@ -196,7 +202,8 @@ static void tcp_server_task(void *pvParameters)
             else
             {
                 rx_buffer[len] = '\0';
-                ESP_LOGI(TAG, "Received %d bytes from %s:%d: %s", len, client_ip, client_port, rx_buffer);
+                ESP_LOGI(TAG, "Received %d bytes from %s:%d: %s", len, client_ip,
+                         client_port, rx_buffer);
 
                 // 把接收到的数据放入接收队列
                 char *msg = malloc(len + 1);
@@ -208,19 +215,22 @@ static void tcp_server_task(void *pvParameters)
 
                 // 检查是否有要发送的数据
                 char *tx_msg = NULL;
-                if (xQueueReceive(wifi_tx_queue, &tx_msg, pdMS_TO_TICKS(100)) == pdTRUE)
+                if (xQueueReceive(wifi_tx_queue, &tx_msg, pdMS_TO_TICKS(100)) ==
+                    pdTRUE)
                 {
                     if (tx_msg)
                     {
                         int sent = send(client_sock, tx_msg, strlen(tx_msg), 0);
-                        ESP_LOGI(TAG, "Sent %d bytes to %s:%d: %s", sent, client_ip, client_port, tx_msg);
+                        ESP_LOGI(TAG, "Sent %d bytes to %s:%d: %s", sent, client_ip,
+                                 client_port, tx_msg);
                         free(tx_msg);
                     }
                 }
             }
         }
 
-        ESP_LOGI(TAG, "Closing connection with client %s:%d", client_ip, client_port);
+        ESP_LOGI(TAG, "Closing connection with client %s:%d", client_ip,
+                 client_port);
         close(client_sock);
     }
 
@@ -254,7 +264,8 @@ static void tcp_server_start()
 {
     if (tcp_server_task_handle == NULL)
     {
-        xTaskCreate(tcp_server_task, "tcp_server", 4096, NULL, 5, &tcp_server_task_handle);
+        xTaskCreate(tcp_server_task, "tcp_server", 4096, NULL, 5,
+                    &tcp_server_task_handle);
     }
 }
 
@@ -266,7 +277,8 @@ static void uart_command_task(void *arg)
     while (1)
     {
         // 从UART读取数据，等待1000ms
-        int len = uart_read_bytes(EX_UART_NUM, data, BUF_SIZE - 1, pdMS_TO_TICKS(1000));
+        int len =
+            uart_read_bytes(EX_UART_NUM, data, BUF_SIZE - 1, pdMS_TO_TICKS(1000));
         if (len > 0)
         {
             data[len] = '\0'; // 字符串结束符
@@ -285,14 +297,18 @@ static void uart_command_task(void *arg)
                     printf("  mode ap                - switch to AP mode\n");
                     printf("  mode sta               - switch to STA mode\n");
                     printf("  mode mix               - switch to AP+STA mode\n");
-                    printf("  set_tcp_port <port>    - set TCP server port (restart server)\n");
-                    printf("  info                   - show current WiFi mode and TCP port\n");
+                    printf("  set_tcp_port <port>    - set TCP server port (restart "
+                           "server)\n");
+                    printf("  info                   - show current WiFi mode and TCP "
+                           "port\n");
                 }
                 // 配置STA的SSID和密码
                 else if (strcmp(cmd, "set_sta") == 0 && parsed == 3)
                 {
-                    strncpy((char *)sta_config.sta.ssid, arg1, sizeof(sta_config.sta.ssid));
-                    strncpy((char *)sta_config.sta.password, arg2, sizeof(sta_config.sta.password));
+                    strncpy((char *)sta_config.sta.ssid, arg1,
+                            sizeof(sta_config.sta.ssid));
+                    strncpy((char *)sta_config.sta.password, arg2,
+                            sizeof(sta_config.sta.password));
                     printf("STA configured: SSID=%s\n", arg1);
 
                     if (current_mode & WIFI_MODE_STA)
@@ -305,9 +321,11 @@ static void uart_command_task(void *arg)
                 else if (strcmp(cmd, "set_ap") == 0 && parsed == 3)
                 {
                     strncpy((char *)ap_config.ap.ssid, arg1, sizeof(ap_config.ap.ssid));
-                    strncpy((char *)ap_config.ap.password, arg2, sizeof(ap_config.ap.password));
+                    strncpy((char *)ap_config.ap.password, arg2,
+                            sizeof(ap_config.ap.password));
                     ap_config.ap.max_connection = 4;
-                    ap_config.ap.authmode = strlen(arg2) == 0 ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_WPA2_PSK;
+                    ap_config.ap.authmode =
+                        strlen(arg2) == 0 ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_WPA2_PSK;
                     printf("AP configured: SSID=%s\n", arg1);
 
                     if (current_mode & WIFI_MODE_AP)
@@ -380,7 +398,8 @@ void wifi_init_and_start(void)
 {
     // 初始化NVS（非易失存储，用于WiFi配置等）
     esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
+        ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
@@ -403,18 +422,15 @@ void wifi_init_and_start(void)
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     // 注册WiFi事件处理回调
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &wifi_event_handler,
-                                                        NULL, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
-                                                        IP_EVENT_STA_GOT_IP,
-                                                        &wifi_event_handler,
-                                                        NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(
+        WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(
+        IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL));
 
     // 默认AP配置
     strncpy((char *)ap_config.ap.ssid, "MyAP", sizeof(ap_config.ap.ssid));
-    strncpy((char *)ap_config.ap.password, "12345678", sizeof(ap_config.ap.password));
+    strncpy((char *)ap_config.ap.password, "12345678",
+            sizeof(ap_config.ap.password));
     ap_config.ap.max_connection = 4;
     ap_config.ap.authmode = WIFI_AUTH_WPA_WPA2_PSK;
 
@@ -428,15 +444,15 @@ void wifi_init_and_start(void)
     tcp_server_start();
 
     // UART初始化参数设置
-    uart_config_t uart_config = {
-        .baud_rate = UART_BAUD_RATE,
-        .data_bits = UART_DATA_8_BITS,
-        .parity = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE};
+    uart_config_t uart_config = {.baud_rate = UART_BAUD_RATE,
+                                 .data_bits = UART_DATA_8_BITS,
+                                 .parity = UART_PARITY_DISABLE,
+                                 .stop_bits = UART_STOP_BITS_1,
+                                 .flow_ctrl = UART_HW_FLOWCTRL_DISABLE};
 
     uart_param_config(EX_UART_NUM, &uart_config);
-    // uart_set_pin(EX_UART_NUM, UART_TXD, UART_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    // uart_set_pin(EX_UART_NUM, UART_TXD, UART_RXD, UART_PIN_NO_CHANGE,
+    // UART_PIN_NO_CHANGE);
     uart_driver_install(EX_UART_NUM, 1024, 0, 0, NULL, 0);
 }
 
@@ -468,8 +484,10 @@ void wifi_rxdata_handler_task(void *pvParameters)
                         "  mode ap                - switch to AP mode\n"
                         "  mode sta               - switch to STA mode\n"
                         "  mode mix               - switch to AP+STA mode\n"
-                        "  set_tcp_port <port>    - set TCP server port (restart server)\n"
-                        "  info                   - show current WiFi mode and TCP port\n";
+                        "  set_tcp_port <port>    - set TCP server port (restart "
+                        "server)\n"
+                        "  info                   - show current WiFi mode and TCP "
+                        "port\n";
 
                     char *data = malloc(strlen(help_msg) + 1);
                     if (data)
@@ -482,8 +500,10 @@ void wifi_rxdata_handler_task(void *pvParameters)
                 // 配置STA的SSID和密码
                 else if (strcmp(cmd, "set_sta") == 0 && parsed == 3)
                 {
-                    strncpy((char *)sta_config.sta.ssid, arg1, sizeof(sta_config.sta.ssid));
-                    strncpy((char *)sta_config.sta.password, arg2, sizeof(sta_config.sta.password));
+                    strncpy((char *)sta_config.sta.ssid, arg1,
+                            sizeof(sta_config.sta.ssid));
+                    strncpy((char *)sta_config.sta.password, arg2,
+                            sizeof(sta_config.sta.password));
                     mywifi_log("STA configured: SSID=%s\n", arg1);
 
                     if (current_mode & WIFI_MODE_STA)
@@ -499,9 +519,11 @@ void wifi_rxdata_handler_task(void *pvParameters)
                     // tcp_server_stop();
                     // tcp_server_start();
                     strncpy((char *)ap_config.ap.ssid, arg1, sizeof(ap_config.ap.ssid));
-                    strncpy((char *)ap_config.ap.password, arg2, sizeof(ap_config.ap.password));
+                    strncpy((char *)ap_config.ap.password, arg2,
+                            sizeof(ap_config.ap.password));
                     ap_config.ap.max_connection = 4;
-                    ap_config.ap.authmode = strlen(arg2) == 0 ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_WPA2_PSK;
+                    ap_config.ap.authmode =
+                        strlen(arg2) == 0 ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_WPA2_PSK;
                     mywifi_log("AP configured: SSID=%s\n", arg1);
 
                     if (current_mode & WIFI_MODE_AP)
@@ -537,7 +559,8 @@ void wifi_rxdata_handler_task(void *pvParameters)
                     {
                         if (tcp_port != new_port)
                         {
-                            mywifi_log("Changing TCP port from %d to %d\n", tcp_port, new_port);
+                            mywifi_log("Changing TCP port from %d to %d\n", tcp_port,
+                                       new_port);
                             tcp_port = new_port;
                             tcp_server_stop();
                             tcp_server_start();
@@ -562,11 +585,10 @@ void wifi_rxdata_handler_task(void *pvParameters)
                         strcat(mode_str, "STA");
 
                     // 直接调用 mywifi_log 格式化输出，避免中间缓冲区
-                    mywifi_log(
-                        "Info:\n"
-                        "  WiFi mode       : %s\n"
-                        "  TCP server port : %d\n",
-                        mode_str, tcp_port);
+                    mywifi_log("Info:\n"
+                               "  WiFi mode       : %s\n"
+                               "  TCP server port : %d\n",
+                               mode_str, tcp_port);
                 }
                 else
                 {
@@ -643,12 +665,13 @@ void mywifi_log(const char *fmt, ...)
 }
 
 /************************** 程序入口 **************************/
-void Wifi_start(void)
+void Wifi_task(void)
 {
     // 初始化WiFi和UART
     wifi_init_and_start();
     // 创建串口命令任务
     // xTaskCreate(uart_command_task, "uart_cmd_task", 4096, NULL, 5, NULL);
     // 创建WiFi数据处理任务
-    xTaskCreate(wifi_rxdata_handler_task, "wifi_data_handler_task", 4096, NULL, 5, NULL);
+    xTaskCreate(wifi_rxdata_handler_task, "wifi_data_handler_task", 4096, NULL, 5,
+                NULL);
 }

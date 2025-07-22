@@ -48,6 +48,11 @@
     "span": "c",
     "compare": "c",
     "cstdint": "c",
-    "mode_ctrl.h": "c"
-  }
+    "mode_ctrl.h": "c",
+    "ctrl_protocol.h": "c",
+    "freertos.h": "c",
+    "esp_log.h": "c",
+    "task.h": "c"
+  },
+
 }

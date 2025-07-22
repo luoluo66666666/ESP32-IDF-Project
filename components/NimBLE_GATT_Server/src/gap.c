@@ -26,12 +26,14 @@ extern void ble_send_task(void *param);
 extern void ble_receive_task(void *param);
 
 /* Private functions */
-inline static void format_addr(char *addr_str, uint8_t addr[]) {
+inline static void format_addr(char *addr_str, uint8_t addr[])
+{
     sprintf(addr_str, "%02X:%02X:%02X:%02X:%02X:%02X", addr[0], addr[1],
             addr[2], addr[3], addr[4], addr[5]);
 }
 
-static void print_conn_desc(struct ble_gap_conn_desc *desc) {
+static void print_conn_desc(struct ble_gap_conn_desc *desc)
+{
     /* Local variables */
     char addr_str[18] = {0};
 
@@ -57,7 +59,8 @@ static void print_conn_desc(struct ble_gap_conn_desc *desc) {
              desc->sec_state.bonded);
 }
 
-static void start_advertising(void) {
+static void start_advertising(void)
+{
     /* Local variables */
     int rc = 0;
     const char *name;
@@ -88,7 +91,8 @@ static void start_advertising(void) {
 
     /* Set advertiement fields */
     rc = ble_gap_adv_set_fields(&adv_fields);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "failed to set advertising data, error code: %d", rc);
         return;
     }
@@ -108,7 +112,8 @@ static void start_advertising(void) {
 
     /* Set scan response fields */
     rc = ble_gap_adv_rsp_set_fields(&rsp_fields);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "failed to set scan response data, error code: %d", rc);
         return;
     }
@@ -124,7 +129,8 @@ static void start_advertising(void) {
     /* Start advertising */
     rc = ble_gap_adv_start(own_addr_type, NULL, BLE_HS_FOREVER, &adv_params,
                            gap_event_handler, NULL);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "failed to start advertising, error code: %d", rc);
         return;
     }
@@ -136,13 +142,15 @@ static void start_advertising(void) {
  * gap_event_handler is a callback function registered when calling
  * ble_gap_adv_start API and called when a GAP event arrives
  */
-static int gap_event_handler(struct ble_gap_event *event, void *arg) {
+static int gap_event_handler(struct ble_gap_event *event, void *arg)
+{
     /* Local variables */
     int rc = 0;
     struct ble_gap_conn_desc desc;
 
     /* Handle different GAP event */
-    switch (event->type) {
+    switch (event->type)
+    {
 
     /* Connect event */
     case BLE_GAP_EVENT_CONNECT:
@@ -152,10 +160,12 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
                  event->connect.status);
 
         /* Connection succeeded */
-        if (event->connect.status == 0) {
+        if (event->connect.status == 0)
+        {
             /* Check connection handle */
             rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
-            if (rc != 0) {
+            if (rc != 0)
+            {
                 ESP_LOGE(TAG,
                          "failed to find connection by handle, error code: %d",
                          rc);
@@ -172,7 +182,8 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
                                                 .supervision_timeout =
                                                     desc.supervision_timeout};
             rc = ble_gap_update_params(event->connect.conn_handle, &params);
-            if (rc != 0) {
+            if (rc != 0)
+            {
                 ESP_LOGE(
                     TAG,
                     "failed to update connection parameters, error code: %d",
@@ -181,7 +192,8 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
             }
         }
         /* Connection failed, restart advertising */
-        else {
+        else
+        {
             start_advertising();
         }
         return rc;
@@ -204,7 +216,8 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
 
         /* Print connection descriptor */
         rc = ble_gap_conn_find(event->conn_update.conn_handle, &desc);
-        if (rc != 0) {
+        if (rc != 0)
+        {
             ESP_LOGE(TAG, "failed to find connection by handle, error code: %d",
                      rc);
             return rc;
@@ -223,7 +236,8 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
     /* Notification sent event */
     case BLE_GAP_EVENT_NOTIFY_TX:
         if ((event->notify_tx.status != 0) &&
-            (event->notify_tx.status != BLE_HS_EDONE)) {
+            (event->notify_tx.status != BLE_HS_EDONE))
+        {
             /* Print notification info on error */
             ESP_LOGI(TAG,
                      "notify event; conn_handle=%d attr_handle=%d "
@@ -260,30 +274,33 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
     return rc;
 }
 
-
 /* Public functions */
-void adv_init(void) {
+void adv_init(void)
+{
     /* Local variables */
     int rc = 0;
     char addr_str[18] = {0};
 
     /* Make sure we have proper BT identity address set (random preferred) */
     rc = ble_hs_util_ensure_addr(0);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "device does not have any available bt address!");
         return;
     }
 
     /* Figure out BT address to use while advertising (no privacy for now) */
     rc = ble_hs_id_infer_auto(0, &own_addr_type);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "failed to infer address type, error code: %d", rc);
         return;
     }
 
     /* Printing ADDR */
     rc = ble_hs_id_copy_addr(own_addr_type, addr_val, NULL);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "failed to copy device address, error code: %d", rc);
         return;
     }
@@ -294,7 +311,8 @@ void adv_init(void) {
     start_advertising();
 }
 
-int gap_init(void) {
+int gap_init(void)
+{
     /* Local variables */
     int rc = 0;
 
@@ -303,14 +321,14 @@ int gap_init(void) {
 
     /* Set GAP device name */
     rc = ble_svc_gap_device_name_set(DEVICE_NAME);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "failed to set device name to %s, error code: %d",
                  DEVICE_NAME, rc);
         return rc;
     }
     return rc;
 }
-
 
 /* Library function declarations */
 void ble_store_config_init(void);
@@ -327,17 +345,20 @@ static void nimble_host_task(void *param);
  *      - on_stack_reset is called when host resets BLE stack due to errors
  *      - on_stack_sync is called when host has synced with controller
  */
-static void on_stack_reset(int reason) {
+static void on_stack_reset(int reason)
+{
     /* On reset, print reset reason to console */
     ESP_LOGI(TAG, "nimble stack reset, reset reason: %d", reason);
 }
 
-static void on_stack_sync(void) {
+static void on_stack_sync(void)
+{
     /* On stack sync, do advertising initialization */
     adv_init();
 }
 
-static void nimble_host_config_init(void) {
+static void nimble_host_config_init(void)
+{
     /* Set host callbacks */
     ble_hs_cfg.reset_cb = on_stack_reset;
     ble_hs_cfg.sync_cb = on_stack_sync;
@@ -348,7 +369,8 @@ static void nimble_host_config_init(void) {
     ble_store_config_init();
 }
 
-static void nimble_host_task(void *param) {
+static void nimble_host_task(void *param)
+{
     /* Task entry log */
     ESP_LOGI(TAG, "nimble host task has been started!");
 
@@ -359,12 +381,14 @@ static void nimble_host_task(void *param) {
     vTaskDelete(NULL);
 }
 
-static void heart_rate_task(void *param) {
+static void heart_rate_task(void *param)
+{
     /* Task entry log */
     ESP_LOGI(TAG, "heart rate task has been started!");
 
     /* Loop forever */
-    while (1) {
+    while (1)
+    {
         /* Update heart rate value every 1 second */
         update_heart_rate();
         ESP_LOGI(TAG, "heart rate updated to %d", get_heart_rate());
@@ -380,10 +404,8 @@ static void heart_rate_task(void *param) {
     vTaskDelete(NULL);
 }
 
-
-
-
-void ble_task(void) {
+void ble_task(void)
+{
     /* Local variables */
     int rc;
     esp_err_t ret;
@@ -396,18 +418,21 @@ void ble_task(void) {
      */
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES ||
-        ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    {
         ESP_ERROR_CHECK(nvs_flash_erase());
         ret = nvs_flash_init();
     }
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(TAG, "failed to initialize nvs flash, error code: %d ", ret);
         return;
     }
 
     /* NimBLE stack initialization */
     ret = nimble_port_init();
-    if (ret != ESP_OK) {
+    if (ret != ESP_OK)
+    {
         ESP_LOGE(TAG, "failed to initialize nimble stack, error code: %d ",
                  ret);
         return;
@@ -415,14 +440,16 @@ void ble_task(void) {
 
     /* GAP service initialization */
     rc = gap_init();
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "failed to initialize GAP service, error code: %d", rc);
         return;
     }
 
     /* GATT server initialization */
     rc = gatt_svc_init();
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "failed to initialize GATT server, error code: %d", rc);
         return;
     }
@@ -431,15 +458,12 @@ void ble_task(void) {
     nimble_host_config_init();
     ble_queue_init();
 
-    ctrl_protocol_init(); // Initialize the control protocol
-    
     /* Start NimBLE host task thread and return */
-    xTaskCreate(nimble_host_task, "NimBLE Host", 4*1024, NULL, 5, NULL);
+    xTaskCreate(nimble_host_task, "NimBLE Host", 4 * 1024, NULL, 5, NULL);
     // xTaskCreate(heart_rate_task, "Heart Rate", 4*1024, NULL, 5, NULL);
     xTaskCreate(ble_send_task, "ble_send_task", 4096, NULL, 5, NULL);
     xTaskCreate(ble_receive_task, "ble_receive_task", 4096, NULL, 5, NULL);
     // xTaskCreate(uart_send_task, "uart_send_task", 4096, NULL, 5, NULL);
-
 
     return;
 }

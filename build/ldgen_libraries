@@ -86,7 +86,6 @@ D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/usb/libusb.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/wifi_provisioning/libwifi_provisioning.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/main/libmain.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/Task_manager/libTask_manager.a
-D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/Bluetooth_module/libBluetooth_module.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/mode_ctrl/libmode_ctrl.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/ctrl_protocol/libctrl_protocol.a
 D:/Micpython-Project/test-1/main/wifi_eap_fast/build/esp-idf/NimBLE_GATT_Server/libNimBLE_GATT_Server.a

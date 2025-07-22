@@ -3,7 +3,7 @@
 void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                int32_t event_id, void* event_data);
                             
-void Wifi_start(void);
+void Wifi_task(void);
 
 void wifi_module_queue_init(void);
 
