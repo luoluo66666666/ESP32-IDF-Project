@@ -14,6 +14,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/param.h>
+#include "ctrl_protocol.h" // 包含控制协议相关函数的头文件
 
 #define TAG "wifi_module" // 日志标签，用于打印日志时区分模块
 
@@ -123,122 +124,95 @@ static void start_wifi_mode(wifi_mode_t mode)
 /************************** TCP服务器任务/兼信息回调 **************************/
 static void tcp_server_task(void *pvParameters)
 {
-    struct sockaddr_in server_addr; // 服务器地址
-    struct sockaddr_in client_addr; // 客户端地址
+    struct sockaddr_in server_addr;
+    struct sockaddr_in client_addr;
     socklen_t client_addr_len = sizeof(client_addr);
+    int server_sock = -1;
     int client_sock = -1;
 
     ESP_LOGI(TAG, "Starting TCP server on port %d", tcp_port);
 
-    // 创建TCP socket
-    tcp_server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (tcp_server_sock < 0)
-    {
+    server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+    if (server_sock < 0) {
         ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
         vTaskDelete(NULL);
         return;
     }
 
-    // 绑定socket到端口和任意IP
     memset(&server_addr, 0, sizeof(server_addr));
     server_addr.sin_family = AF_INET;
     server_addr.sin_port = htons(tcp_port);
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    if (bind(tcp_server_sock, (struct sockaddr *)&server_addr,
-             sizeof(server_addr)) != 0)
-    {
+    if (bind(server_sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0) {
         ESP_LOGE(TAG, "Socket bind failed: errno %d", errno);
-        close(tcp_server_sock);
+        close(server_sock);
         vTaskDelete(NULL);
         return;
     }
 
-    if (listen(tcp_server_sock, 5) != 0)
-    {
+    if (listen(server_sock, 5) != 0) {
         ESP_LOGE(TAG, "Socket listen failed: errno %d", errno);
-        close(tcp_server_sock);
+        close(server_sock);
         vTaskDelete(NULL);
         return;
     }
 
     ESP_LOGI(TAG, "TCP server listening");
 
-    char rx_buffer[128];
-
-    while (1)
-    {
-        ESP_LOGI(TAG, "Waiting for a client to connect...");
-        client_sock = accept(tcp_server_sock, (struct sockaddr *)&client_addr,
-                             &client_addr_len);
-        if (client_sock < 0)
-        {
-            ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
+    while (1) {
+        ESP_LOGI(TAG, "Waiting for client connection...");
+        client_sock = accept(server_sock, (struct sockaddr *)&client_addr, &client_addr_len);
+        if (client_sock < 0) {
+            ESP_LOGE(TAG, "Accept failed: errno %d", errno);
             break;
         }
 
-        // 获取客户端IP地址字符串
-        char client_ip[INET_ADDRSTRLEN];
+        char client_ip[INET_ADDRSTRLEN] = {0};
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
         uint16_t client_port = ntohs(client_addr.sin_port);
-
         ESP_LOGI(TAG, "Client connected from %s:%d", client_ip, client_port);
 
-        // 通信循环
-        while (1)
-        {
-            int len = recv(client_sock, rx_buffer, sizeof(rx_buffer) - 1, 0);
-            if (len < 0)
-            {
-                ESP_LOGE(TAG, "recv failed from %s:%d, errno %d", client_ip,
-                         client_port, errno);
+        while (1) {
+            wifi_data_t rx_msg = {0};
+            int len = recv(client_sock, rx_msg.buf, sizeof(rx_msg.buf) - 1, 0);
+            if (len < 0) {
+                ESP_LOGE(TAG, "Recv failed from %s:%d, errno %d", client_ip, client_port, errno);
+                break;
+            } else if (len == 0) {
+                ESP_LOGI(TAG, "Client %s:%d disconnected", client_ip, client_port);
                 break;
             }
-            else if (len == 0)
-            {
-                ESP_LOGI(TAG, "Client %s:%d closed connection", client_ip, client_port);
-                break;
-            }
-            else
-            {
-                rx_buffer[len] = '\0';
-                ESP_LOGI(TAG, "Received %d bytes from %s:%d: %s", len, client_ip,
-                         client_port, rx_buffer);
 
-                // 把接收到的数据放入接收队列
-                char *msg = malloc(len + 1);
-                if (msg)
-                {
-                    strcpy(msg, rx_buffer);
-                    xQueueSend(wifi_rx_queue, &msg, portMAX_DELAY);
-                }
+            rx_msg.len = len;
+            rx_msg.buf[len] = '\0'; // 末尾加终止符，安全打印
 
-                // 检查是否有要发送的数据
-                char *tx_msg = NULL;
-                if (xQueueReceive(wifi_tx_queue, &tx_msg, pdMS_TO_TICKS(100)) ==
-                    pdTRUE)
-                {
-                    if (tx_msg)
-                    {
-                        int sent = send(client_sock, tx_msg, strlen(tx_msg), 0);
-                        ESP_LOGI(TAG, "Sent %d bytes to %s:%d: %s", sent, client_ip,
-                                 client_port, tx_msg);
-                        free(tx_msg);
-                    }
+            ESP_LOGI(TAG, "Received %d bytes from %s:%d: %s", len, client_ip, client_port, rx_msg.buf);
+
+            // 发送接收到的数据到接收队列，后面处理
+            xQueueSend(wifi_rx_queue, &rx_msg, portMAX_DELAY);
+
+            // 从发送队列获取待发送数据
+            wifi_data_t tx_msg = {0};
+            if (xQueueReceive(wifi_tx_queue, &tx_msg, pdMS_TO_TICKS(100)) == pdTRUE) {
+                if (tx_msg.len > 0) {
+                    // 发送给客户端，长度准确
+                    int sent = send(client_sock, tx_msg.buf, tx_msg.len, 0);
+                    ESP_LOGI(TAG, "Sent %d bytes to %s:%d: %.*s", sent, client_ip, client_port, (int)tx_msg.len, tx_msg.buf);
                 }
             }
         }
 
-        ESP_LOGI(TAG, "Closing connection with client %s:%d", client_ip,
-                 client_port);
+        ESP_LOGI(TAG, "Closing connection with client %s:%d", client_ip, client_port);
         close(client_sock);
     }
 
-    close(tcp_server_sock);
+    close(server_sock);
     tcp_server_sock = -1;
     ESP_LOGI(TAG, "TCP server task ended");
     vTaskDelete(NULL);
 }
+
 
 /**
  * @brief 停止TCP服务器任务和关闭socket
@@ -459,51 +433,57 @@ void wifi_init_and_start(void)
 /************************** Wifi接收队列任务处理 **************************/
 void wifi_rxdata_handler_task(void *pvParameters)
 {
-    wifi_module_queue_init(); // 初始化队列
-
-    char *rx_msg = NULL;
+    wifi_module_queue_init(); // 初始化队列，确保创建队列时用 wifi_data_t 大小
+    wifi_data_t rxdata = {0}; // 接收数据结构体
+    char response[QUEUE_ITEM_SIZE] = {0};
 
     while (1)
     {
-        if (xQueueReceive(wifi_rx_queue, &rx_msg, portMAX_DELAY) == pdPASS)
+        if (xQueueReceive(wifi_rx_queue, &rxdata, portMAX_DELAY) == pdPASS)
         {
-            // rx_msg[BUF_SIZE - 1] = '\0'; // 确保字符串结束符
+            // 确保 buf 以 '\0' 结尾，方便打印和处理字符串
+            if (rxdata.len >= QUEUE_ITEM_SIZE)
+                rxdata.len = QUEUE_ITEM_SIZE - 1;
+            rxdata.buf[rxdata.len] = '\0';
 
-            char cmd[32], arg1[64], arg2[64];
-            int parsed = sscanf((char *)rx_msg, "%s %63s %63s", cmd, arg1, arg2);
+            ESP_LOGI(TAG, "Received data: %s", (char *)rxdata.buf);
+
+            char cmd[32] = {0}, arg1[64] = {0}, arg2[64] = {0};
+            int parsed = sscanf((char *)rxdata.buf, "%31s %63s %63s", cmd, arg1, arg2);
 
             if (parsed >= 1)
             {
-                // help命令：打印所有支持的命令
                 if (strcmp(cmd, "help") == 0)
                 {
                     const char *help_msg =
-                        "Commands:\n"
-                        "  set_sta <ssid> <pass>  - configure STA mode\n"
-                        "  set_ap <ssid> <pass>   - configure AP mode\n"
-                        "  mode ap                - switch to AP mode\n"
-                        "  mode sta               - switch to STA mode\n"
-                        "  mode mix               - switch to AP+STA mode\n"
-                        "  set_tcp_port <port>    - set TCP server port (restart "
-                        "server)\n"
-                        "  info                   - show current WiFi mode and TCP "
-                        "port\n";
+                                    "  set_sta <ssid> <pass>   - STA模式配置\n"
+                                    "  set_ap <ssid> <pass>    - AP模式配置\n"
+                                    "  mode ap/sta/mix         - 切换WiFi模式\n"
+                                    "  set_tcp_port <port>     - 设置TCP端口\n"
+                                    "  info                    - 显示WiFi状态\n";
 
-                    char *data = malloc(strlen(help_msg) + 1);
-                    if (data)
+                    wifi_data_t tx_data = {0};
+                    size_t len = strlen(help_msg);
+                    if (len >= QUEUE_ITEM_SIZE)
+                        len = QUEUE_ITEM_SIZE - 1;
+
+                    memcpy(tx_data.buf, help_msg, len);
+                    tx_data.len = len;
+                    tx_data.buf[len] = '\0';
+
+                    if (xQueueSend(wifi_tx_queue, &tx_data, portMAX_DELAY) != pdTRUE)
                     {
-                        strcpy(data, help_msg);
-                        xQueueSend(wifi_tx_queue, &data, portMAX_DELAY);
+                        mywifi_log("Failed to send help response\n");
                     }
                 }
-
-                // 配置STA的SSID和密码
                 else if (strcmp(cmd, "set_sta") == 0 && parsed == 3)
                 {
-                    strncpy((char *)sta_config.sta.ssid, arg1,
-                            sizeof(sta_config.sta.ssid));
-                    strncpy((char *)sta_config.sta.password, arg2,
-                            sizeof(sta_config.sta.password));
+                    strncpy((char *)sta_config.sta.ssid, arg1, sizeof(sta_config.sta.ssid) - 1);
+                    sta_config.sta.ssid[sizeof(sta_config.sta.ssid) - 1] = '\0';
+
+                    strncpy((char *)sta_config.sta.password, arg2, sizeof(sta_config.sta.password) - 1);
+                    sta_config.sta.password[sizeof(sta_config.sta.password) - 1] = '\0';
+
                     mywifi_log("STA configured: SSID=%s\n", arg1);
 
                     if (current_mode & WIFI_MODE_STA)
@@ -512,18 +492,18 @@ void wifi_rxdata_handler_task(void *pvParameters)
                         esp_wifi_connect();
                     }
                 }
-                // 配置AP的SSID和密码
                 else if (strcmp(cmd, "set_ap") == 0 && parsed == 3)
                 {
-                    // mywifi_log("set_ap %s to %s\n", arg1, arg2);
-                    // tcp_server_stop();
-                    // tcp_server_start();
-                    strncpy((char *)ap_config.ap.ssid, arg1, sizeof(ap_config.ap.ssid));
-                    strncpy((char *)ap_config.ap.password, arg2,
-                            sizeof(ap_config.ap.password));
+                    strncpy((char *)ap_config.ap.ssid, arg1, sizeof(ap_config.ap.ssid) - 1);
+                    ap_config.ap.ssid[sizeof(ap_config.ap.ssid) - 1] = '\0';
+
+                    strncpy((char *)ap_config.ap.password, arg2, sizeof(ap_config.ap.password) - 1);
+                    ap_config.ap.password[sizeof(ap_config.ap.password) - 1] = '\0';
+
                     ap_config.ap.max_connection = 4;
                     ap_config.ap.authmode =
                         strlen(arg2) == 0 ? WIFI_AUTH_OPEN : WIFI_AUTH_WPA_WPA2_PSK;
+
                     mywifi_log("AP configured: SSID=%s\n", arg1);
 
                     if (current_mode & WIFI_MODE_AP)
@@ -531,7 +511,6 @@ void wifi_rxdata_handler_task(void *pvParameters)
                         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
                     }
                 }
-                // 切换WiFi模式
                 else if (strcmp(cmd, "mode") == 0 && parsed >= 2)
                 {
                     if (strcmp(arg1, "ap") == 0)
@@ -551,7 +530,6 @@ void wifi_rxdata_handler_task(void *pvParameters)
                         mywifi_log("Unknown mode: %s\n", arg1);
                     }
                 }
-                // 动态设置TCP端口号（重启TCP服务器生效）
                 else if (strcmp(cmd, "set_tcp_port") == 0 && parsed == 2)
                 {
                     int new_port = atoi(arg1);
@@ -559,8 +537,7 @@ void wifi_rxdata_handler_task(void *pvParameters)
                     {
                         if (tcp_port != new_port)
                         {
-                            mywifi_log("Changing TCP port from %d to %d\n", tcp_port,
-                                       new_port);
+                            mywifi_log("Changing TCP port from %d to %d\n", tcp_port, new_port);
                             tcp_port = new_port;
                             tcp_server_stop();
                             tcp_server_start();
@@ -575,7 +552,6 @@ void wifi_rxdata_handler_task(void *pvParameters)
                         mywifi_log("Invalid port number: %s\n", arg1);
                     }
                 }
-                // 查看当前状态信息
                 else if (strcmp(cmd, "info") == 0)
                 {
                     char mode_str[16] = {0};
@@ -584,7 +560,6 @@ void wifi_rxdata_handler_task(void *pvParameters)
                     if (current_mode & WIFI_MODE_STA)
                         strcat(mode_str, "STA");
 
-                    // 直接调用 mywifi_log 格式化输出，避免中间缓冲区
                     mywifi_log("Info:\n"
                                "  WiFi mode       : %s\n"
                                "  TCP server port : %d\n",
@@ -592,26 +567,45 @@ void wifi_rxdata_handler_task(void *pvParameters)
                 }
                 else
                 {
-                    mywifi_log("Unknown command or bad arguments: %s\n", cmd);
+                    // 调用协议，生成响应
+                    memset(response, 0, sizeof(response));
+                    ctrl_protocol((char *)rxdata.buf, response, sizeof(response));
+
+                    if (strlen(response) > 0 && wifi_tx_queue != NULL)
+                    {
+                        wifi_data_t tx_data = {0};
+                        strncpy((char *)tx_data.buf, response, QUEUE_ITEM_SIZE - 1);
+                        tx_data.buf[QUEUE_ITEM_SIZE - 1] = '\0';
+                        tx_data.len = strnlen((char *)tx_data.buf, QUEUE_ITEM_SIZE);
+
+                        if (xQueueSend(wifi_tx_queue, &tx_data, portMAX_DELAY) != pdTRUE)
+                        {
+                            mywifi_log("Failed to send response to queue\n");
+                        }
+                        else
+                        {
+                            mywifi_log("Response sent: %s\n", response);
+                        }
+                    }
                 }
             }
         }
-        free(rx_msg); // 释放接收到的消息内存
     }
 }
+
 
 /************************** WiFi发送队列任务处理 **************************/
 void wifi_txdata_handler_task(void *pvParameters)
 {
     while (1)
     {
-        char *tx_msg = NULL;
-        if (xQueueReceive(wifi_tx_queue, &tx_msg, portMAX_DELAY))
+        wifi_data_t txdata = {0}; // 用于接收发送队列中的数据
+        if (xQueueReceive(wifi_tx_queue, &txdata, portMAX_DELAY))
         {
             // 发送数据到串口
 
             // 释放发送的数据
-            free(tx_msg);
+            // free(tx_msg);
         }
     }
 }
@@ -620,8 +614,8 @@ void wifi_txdata_handler_task(void *pvParameters)
 void wifi_module_queue_init(void)
 {
     // 创建WiFi发送和接收队列
-    wifi_tx_queue = xQueueCreate(128, sizeof(char *)); // 发送队列
-    wifi_rx_queue = xQueueCreate(128, sizeof(char *)); // 接收队列
+    wifi_tx_queue = xQueueCreate(128, sizeof(wifi_data_t)); // 发送队列
+    wifi_rx_queue = xQueueCreate(128, sizeof(wifi_data_t)); // 接收队列
 
     if (wifi_tx_queue == NULL || wifi_rx_queue == NULL)
     {

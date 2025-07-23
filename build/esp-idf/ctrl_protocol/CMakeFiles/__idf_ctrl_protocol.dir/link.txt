@@ -1,2 +1,0 @@
-D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ar.exe qc libctrl_protocol.a CMakeFiles/__idf_ctrl_protocol.dir/ctrl_protocol.c.obj CMakeFiles/__idf_ctrl_protocol.dir/ctrl.c.obj
-D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ranlib.exe libctrl_protocol.a

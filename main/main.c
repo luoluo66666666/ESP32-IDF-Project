@@ -43,6 +43,14 @@ void mode_control_task(void *pvParameters)
         case Mode4_BIT:
             mode4(); // 调用模式4的控制函数
             break;
+        case Mode5_UPPER_BIT:
+            ESP_LOGI(TAG, "Mode 5 Upper activated");
+            mode5_up(); // 调用模式5上半部分的控制函数
+            break;
+        case Mode5_LOWER_BIT:
+            ESP_LOGI(TAG, "Mode 5 Lower activated");
+            mode5_down(); // 调用模式5下半部分的控制函数
+            break;
         default:
             break;
         }

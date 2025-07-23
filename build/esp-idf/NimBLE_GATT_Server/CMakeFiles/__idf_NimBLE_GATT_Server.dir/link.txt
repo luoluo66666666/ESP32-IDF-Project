@@ -1,2 +1,0 @@
-D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ar.exe qc libNimBLE_GATT_Server.a CMakeFiles/__idf_NimBLE_GATT_Server.dir/src/gap.c.obj CMakeFiles/__idf_NimBLE_GATT_Server.dir/src/gatt_svc.c.obj CMakeFiles/__idf_NimBLE_GATT_Server.dir/src/heart_rate_mock.c.obj
-D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ranlib.exe libNimBLE_GATT_Server.a

@@ -1,2 +1,0 @@
-D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ar.exe qc libmode_ctrl.a CMakeFiles/__idf_mode_ctrl.dir/mode_ctrl.c.obj CMakeFiles/__idf_mode_ctrl.dir/mode0.c.obj CMakeFiles/__idf_mode_ctrl.dir/mode1.c.obj CMakeFiles/__idf_mode_ctrl.dir/mode2.c.obj CMakeFiles/__idf_mode_ctrl.dir/mode3.c.obj CMakeFiles/__idf_mode_ctrl.dir/mode4.c.obj CMakeFiles/__idf_mode_ctrl.dir/mode5.c.obj
-D:\ESP.SSIF\tools\xtensa-esp-elf\esp-14.2.0_20241119\xtensa-esp-elf\bin\xtensa-esp32s3-elf-ranlib.exe libmode_ctrl.a

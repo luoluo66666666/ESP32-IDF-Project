@@ -12,7 +12,7 @@
 #include "ctrl_protocol.h" // Include the ctrl_protocol header for ctrl_protocol functions
 
 /* 创建发送和接收队列 */
-#define QUEUE_LENGTH 10
+#define QUEUE_LENGTH 20
 #define QUEUE_ITEM_SIZE 256
 
 static QueueHandle_t ble_tx_queue = NULL;
