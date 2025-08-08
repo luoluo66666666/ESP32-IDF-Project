@@ -26,30 +26,38 @@ void mode_control_task(void *pvParameters)
         {
         case Mode0_BIT:
             ESP_LOGI(TAG, "Mode 0 activated");
-            mode0(); // 调用模式0的控制函数
+            mode0();                                              // 调用模式0的控制函数
+            xEventGroupClearBits(event_ctrl_protocol, Mode0_BIT); // 手动清除事件位
             break;
         case Mode1_BIT:
             ESP_LOGI(TAG, "Mode 1 activated");
-            mode1(); // 调用模式1的控制函数
+            mode1();                                              // 调用模式1的控制函数
+            xEventGroupClearBits(event_ctrl_protocol, Mode1_BIT); // 手动清除事件位
             break;
         case Mode2_BIT:
             ESP_LOGI(TAG, "Mode 2 activated");
-            mode2(); // 调用模式2的控制函数
+            mode2();                                              // 调用模式2的控制函数
+            xEventGroupClearBits(event_ctrl_protocol, Mode2_BIT); // 手动清除事件位
             break;
         case Mode3_BIT:
             ESP_LOGI(TAG, "Mode 3 activated");
-            mode3(); // 调用模式3的控制函数
+            mode3();                                              // 调用模式3的控制函数
+            xEventGroupClearBits(event_ctrl_protocol, Mode3_BIT); // 手动清除事件位
             break;
         case Mode4_BIT:
-            mode4(); // 调用模式4的控制函数
+            ESP_LOGI(TAG, "Mode 3 activated");
+            mode4();                                              // 调用模式4的控制函数
+            xEventGroupClearBits(event_ctrl_protocol, Mode4_BIT); // 手动清除事件位
             break;
         case Mode5_UPPER_BIT:
             ESP_LOGI(TAG, "Mode 5 Upper activated");
             mode5_up(); // 调用模式5上半部分的控制函数
+            xEventGroupClearBits(event_ctrl_protocol, Mode5_UPPER_BIT); // 手动清除事件位
             break;
         case Mode5_LOWER_BIT:
             ESP_LOGI(TAG, "Mode 5 Lower activated");
-            mode5_down(); // 调用模式5下半部分的控制函数
+            mode5_down();                                         // 调用模式5下半部分的控制函数
+            xEventGroupClearBits(event_ctrl_protocol, Mode5_LOWER_BIT); // 手动清除事件位
             break;
         default:
             break;
@@ -60,7 +68,7 @@ void mode_control_task(void *pvParameters)
 void app_main(void)
 {
     ctrl_protocol_init(); // Initialize the control protocol
-    Wifi_task();         // 启动wifi模块
+    Wifi_task();          // 启动wifi模块
 
     ble_task(); // 启动BLE任务
 

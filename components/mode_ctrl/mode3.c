@@ -8,37 +8,12 @@ static const char *TAG = "MODE3";
 extern int do_pin[26];
 extern int di_pin[6];
 
-/*-------------------------------------------------
- * GPIO 操作小工具（保持可读性，但不折叠流程逻辑）
- *------------------------------------------------*/
-#define TURN_ON(p)      set_do_pin((p), 1)
-#define TURN_OFF(p)     set_do_pin((p), 0)
-#define TOGGLE(p)       set_do_pin((p), !get_do_pin((p)))
 
-#define GROUP_ON(start, end)                         \
-    do                                               \
-    {                                                \
-        for (size_t _i = (start); _i <= (end); ++_i) \
-        {                                            \
-            TURN_ON(_i);                             \
-        }                                            \
-    } while (0)
-
-#define GROUP_OFF(start, end)                        \
-    do                                               \
-    {                                                \
-        for (size_t _i = (start); _i <= (end); ++_i) \
-        {                                            \
-            TURN_OFF(_i);                            \
-        }                                            \
-    } while (0)
-
-
-static inline void delay_1s(void) { vTaskDelay(pdMS_TO_TICKS(1000)); }
-
-/*-------------------------------------------------
- * mode3 : 25 分钟护发洗（72 个显式状态）
- *------------------------------------------------*/
+/*******************************************************************************
+****@brief: MODE3 25min护发洗
+****@author: Luo
+****@date: 2025-08-08 15:49:25
+********************************************************************************/
 int mode3(void)
 {
     int status   = 0;   /* 当前状态编号 */

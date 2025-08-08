@@ -2,19 +2,33 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mode_ctrl.h"
-#include <stdio.h>
 
-static const char *TAG = "MODE0";
+static const char *TAG = "MODE1";
 
 extern int do_pin[26];
 extern int di_pin[6];
 
-/*******************************************************************************
-****函数功能: MODE0
-****作者名称: Luo
-****创建日期: 2025-08-08 14:09:46
-********************************************************************************/
-int mode0(void)
+/*---------------- GPIO 快捷宏 ----------------*/
+#define TURN_ON(pin) set_do_pin((pin), 1)
+#define TURN_OFF(pin) set_do_pin((pin), 0)
+#define TOGGLE(pin) set_do_pin((pin), !get_do_pin((pin)))
+
+#define GROUP_ON(start, end)                         \
+    do                                               \
+    {                                                \
+        for (size_t _i = (start); _i <= (end); ++_i) \
+            TURN_ON(_i);                             \
+    } while (0)
+#define GROUP_OFF(start, end)                        \
+    do                                               \
+    {                                                \
+        for (size_t _i = (start); _i <= (end); ++_i) \
+            TURN_OFF(_i);                            \
+    } while (0)
+
+static inline void delay_1s(void) { vTaskDelay(pdMS_TO_TICKS(1000)); }
+
+int mode1(void)
 {
     int status = 0;
     int time_cnt = 0;
@@ -22,13 +36,11 @@ int mode0(void)
     int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
     int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
 
-    ESP_LOGI(TAG, "Entering mode 0");
+    ESP_LOGI(TAG, "Entering mode 1");
 
-    /* 初始化所有 DO */
-    for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
-    {
+    /* 进入前确保全部 DO 关闭 */
+    for (size_t i = 0; i < 26; ++i)
         TURN_OFF(i);
-    }
 
     /* 读取 DI，必要时可作暂停/急停等判断 */
     for (size_t i = 0; i < sizeof(di_pin) / sizeof(di_pin[0]); ++i)
@@ -36,7 +48,6 @@ int mode0(void)
         di_level[i] = get_di_pin(i);
     }
 
-    /*------------------ 主循环 ------------------*/
     while (true)
     {
 
@@ -63,43 +74,41 @@ int mode0(void)
             ESP_LOGI(TAG, "Resumed");
         }
 
-        /*------------------ 状态机 ------------------*/
         switch (status)
         {
-        case 0: /* 冷水 1（5 s）*/
+        case 0: // 放冷水  (5 s)
             if (time_cnt == 0)
             {
-                TURN_ON(7);       /* 水泵 */
-                GROUP_ON(12, 21); /* 12‑21 号电磁阀 */
-                TURN_ON(8);       /* 第一路水阀 */
+                TURN_ON(7);
+                GROUP_ON(12, 21);
+                TURN_ON(8);
             }
             if (++time_cnt >= 5)
             {
+                TURN_OFF(8);
                 status = 1;
                 time_cnt = 0;
             }
             break;
 
-        case 1: /* 冲水 2（30 s）*/
+        case 1: // 冲水 (40 s)
             if (time_cnt == 0)
             {
-                TURN_ON(3);  /* 加热 */
-                TURN_ON(0);  /* 上下推杆 */
-                TURN_OFF(1); /* 左右推杆 */
+                TURN_ON(3);
+                TURN_ON(0);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 30)
+            if (++time_cnt >= 40)
             {
                 status = 2;
                 time_cnt = 0;
             }
             break;
 
-        case 2: /* 暂停 3（10 s）*/
+        case 2: // 暂停 (10 s)
             if (time_cnt == 0)
             {
-                TURN_OFF(7);
                 TURN_OFF(3);
                 TURN_OFF(0);
                 TURN_OFF(1);
@@ -112,26 +121,25 @@ int mode0(void)
             }
             break;
 
-        case 3: /* 洗发水 4（5 s）*/
+        case 3: // 洗发水 (10 s)
             if (time_cnt == 0)
             {
-                TURN_ON(7);
                 TURN_ON(3);
+                TURN_ON(7);
                 TURN_ON(16);
                 TURN_ON(5);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 5)
+            if (++time_cnt >= 10)
             {
                 status = 4;
                 time_cnt = 0;
             }
             break;
 
-        case 4: /* 暂停 5（10 s）*/
+        case 4: // 暂停 (10 s)
             if (time_cnt == 0)
             {
                 TURN_OFF(7);
@@ -148,24 +156,24 @@ int mode0(void)
             }
             break;
 
-        case 5: /* 冲水 6（30 s）*/
+        case 5: // 冲水 (40 s)
             if (time_cnt == 0)
             {
                 TURN_ON(9);
                 TURN_ON(3);
                 GROUP_ON(12, 21);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 30)
+            if (++time_cnt >= 40)
             {
                 status = 6;
                 time_cnt = 0;
             }
+            break;
 
-        case 6: /* 暂停 7（10 s）*/
+        case 6: // 暂停 (10 s)
             if (time_cnt == 0)
             {
                 TURN_OFF(9);
@@ -181,29 +189,28 @@ int mode0(void)
             }
             break;
 
-        case 7: /* 洗发水 8（5 s）*/
+        case 7: // 洗发水 (10 s)
             if (time_cnt == 0)
             {
-                TURN_ON(7);
                 TURN_ON(3);
+                TURN_ON(9);
                 TURN_ON(16);
                 TURN_ON(5);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 5)
+            if (++time_cnt >= 10)
             {
                 status = 8;
                 time_cnt = 0;
             }
             break;
 
-        case 8: /* 暂停 9（10 s）*/
+        case 8: // 暂停 (10 s)
             if (time_cnt == 0)
             {
-                TURN_OFF(7);
+                TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(16);
                 TURN_OFF(5);
@@ -217,25 +224,24 @@ int mode0(void)
             }
             break;
 
-        case 9: /* 冲水 10（30 s）*/
+        case 9: // 冲水 (40 s)
             if (time_cnt == 0)
             {
                 TURN_ON(9);
                 TURN_ON(3);
                 GROUP_ON(12, 21);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 30)
+            if (++time_cnt >= 40)
             {
                 status = 10;
                 time_cnt = 0;
             }
             break;
 
-        case 10: /* 暂停 11（10 s）*/
+        case 10: // 暂停 (10 s)
             if (time_cnt == 0)
             {
                 TURN_OFF(9);
@@ -251,29 +257,28 @@ int mode0(void)
             }
             break;
 
-        case 11: /* 护发素 12（5 s）*/
+        case 11: // 护发素 (10 s)
             if (time_cnt == 0)
             {
-                TURN_ON(7);
+                TURN_ON(9);
                 TURN_ON(3);
                 TURN_ON(16);
                 TURN_ON(6);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 5)
+            if (++time_cnt >= 10)
             {
                 status = 12;
                 time_cnt = 0;
             }
             break;
 
-        case 12: /* 暂停 13（10 s）*/
+        case 12: // 暂停 (10 s)
             if (time_cnt == 0)
             {
-                TURN_OFF(7);
+                TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(16);
                 TURN_OFF(6);
@@ -287,25 +292,24 @@ int mode0(void)
             }
             break;
 
-        case 13: /* 冲水 14（30 s）*/
+        case 13: // 冲水 (40 s)
             if (time_cnt == 0)
             {
                 TURN_ON(9);
                 TURN_ON(3);
                 GROUP_ON(12, 21);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 30)
+            if (++time_cnt >= 40)
             {
                 status = 14;
                 time_cnt = 0;
             }
             break;
 
-        case 14: /* 暂停 15（10 s）*/
+        case 14: // 暂停 (10 s)
             if (time_cnt == 0)
             {
                 TURN_OFF(9);
@@ -321,29 +325,28 @@ int mode0(void)
             }
             break;
 
-        case 15: /* 洗发水 16（5 s）*/
+        case 15: // 洗发水 (10 s)
             if (time_cnt == 0)
             {
-                TURN_ON(7);
                 TURN_ON(3);
+                TURN_ON(9);
                 TURN_ON(16);
                 TURN_ON(5);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 5)
+            if (++time_cnt >= 10)
             {
                 status = 16;
                 time_cnt = 0;
             }
             break;
 
-        case 16: /* 暂停 17（10 s）*/
+        case 16: // 暂停 (10 s)
             if (time_cnt == 0)
             {
-                TURN_OFF(7);
+                TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(16);
                 TURN_OFF(5);
@@ -357,14 +360,13 @@ int mode0(void)
             }
             break;
 
-        case 17: /* 冲水 18（40 s）*/
+        case 17: // 冲水 (40 s)
             if (time_cnt == 0)
             {
                 TURN_ON(9);
                 TURN_ON(3);
                 GROUP_ON(12, 21);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
@@ -375,7 +377,7 @@ int mode0(void)
             }
             break;
 
-        case 18: /* 暂停 19（10 s）*/
+        case 18: // 暂停 (10 s)
             if (time_cnt == 0)
             {
                 TURN_OFF(9);
@@ -391,7 +393,7 @@ int mode0(void)
             }
             break;
 
-        case 19: /* 护发素 20（5 s）*/
+        case 19: // 护发素 (10 s)
             if (time_cnt == 0)
             {
                 TURN_ON(9);
@@ -399,21 +401,19 @@ int mode0(void)
                 TURN_ON(16);
                 TURN_ON(6);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 5)
+            if (++time_cnt >= 10)
             {
                 status = 20;
                 time_cnt = 0;
             }
             break;
 
-        case 20: /* 暂停 21（10 s）*/
+        case 20: // 暂停 (10 s)
             if (time_cnt == 0)
             {
-                TURN_ON(11); /* 额外开启 pin11 */
                 TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(16);
@@ -428,28 +428,27 @@ int mode0(void)
             }
             break;
 
-        case 21: /* 冲水 22（60 s）*/
+        case 21: // 冲水 (40 s)
             if (time_cnt == 0)
             {
-                TURN_ON(7);
+                TURN_ON(9);
                 TURN_ON(3);
                 GROUP_ON(12, 21);
                 TURN_ON(0);
-                TURN_OFF(1);
             }
             TOGGLE(0);
             TOGGLE(1);
-            if (++time_cnt >= 60)
+            if (++time_cnt >= 40)
             {
                 status = 22;
                 time_cnt = 0;
             }
             break;
 
-        case 22: /* 暂停 23（10 s）*/
+        case 22: // 暂停 (10 s)
             if (time_cnt == 0)
             {
-                TURN_OFF(7);
+                TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(0);
                 TURN_OFF(1);
@@ -462,7 +461,158 @@ int mode0(void)
             }
             break;
 
-        case 23: /*24 结束 / 复位 */
+        case 23: // 洗发水 (10 s)
+            if (time_cnt == 0)
+            {
+                TURN_ON(3);
+                TURN_ON(9);
+                TURN_ON(16);
+                TURN_ON(5);
+                TURN_ON(0);
+            }
+            TOGGLE(0);
+            TOGGLE(1);
+            if (++time_cnt >= 10)
+            {
+                status = 24;
+                time_cnt = 0;
+            }
+            break;
+
+        case 24: // 暂停 (10 s)
+            if (time_cnt == 0)
+            {
+                TURN_OFF(9);
+                TURN_OFF(3);
+                TURN_OFF(16);
+                TURN_OFF(5);
+                TURN_OFF(0);
+                TURN_OFF(1);
+            }
+            if (++time_cnt >= 10)
+            {
+                status = 25;
+                time_cnt = 0;
+            }
+            break;
+
+        case 25: // 冲水 (40 s)
+            if (time_cnt == 0)
+            {
+                TURN_ON(9);
+                TURN_ON(3);
+                GROUP_ON(12, 21);
+                TURN_ON(0);
+            }
+            TOGGLE(0);
+            TOGGLE(1);
+            if (++time_cnt >= 40)
+            {
+                status = 26;
+                time_cnt = 0;
+            }
+            break;
+
+        case 26: // 暂停 (10 s)
+            if (time_cnt == 0)
+            {
+                TURN_OFF(9);
+                TURN_OFF(3);
+                TURN_OFF(0);
+                TURN_OFF(1);
+                GROUP_OFF(12, 21);
+            }
+            if (++time_cnt >= 10)
+            {
+                status = 27;
+                time_cnt = 0;
+            }
+            break;
+
+        case 27: // 护发素 (10 s)
+            if (time_cnt == 0)
+            {
+                TURN_ON(9);
+                TURN_ON(3);
+                TURN_ON(16);
+                TURN_ON(6);
+                TURN_ON(0);
+            }
+            TOGGLE(0);
+            TOGGLE(1);
+            if (++time_cnt >= 10)
+            {
+                status = 28;
+                time_cnt = 0;
+            }
+            break;
+
+        case 28: // 暂停 (10 s)
+            if (time_cnt == 0)
+            {
+                TURN_OFF(9);
+                TURN_OFF(3);
+                TURN_OFF(16);
+                TURN_OFF(6);
+                TURN_OFF(0);
+                TURN_OFF(1);
+            }
+            if (++time_cnt >= 10)
+            {
+                status = 29;
+                time_cnt = 0;
+            }
+            break;
+
+        case 29: // 冲水 (40 s)
+            if (time_cnt == 0)
+            {
+                TURN_ON(9);
+                TURN_ON(3);
+                GROUP_ON(12, 21);
+                TURN_ON(0);
+            }
+            TOGGLE(0);
+            TOGGLE(1);
+            if (++time_cnt >= 40)
+            {
+                status = 30;
+                time_cnt = 0;
+            }
+            break;
+
+        case 30: // 暂停 (10 s)
+            if (time_cnt == 0)
+            {
+                TURN_OFF(9);
+                TURN_OFF(3);
+                TURN_OFF(0);
+                TURN_OFF(1);
+                GROUP_OFF(12, 21);
+            }
+            if (++time_cnt >= 10)
+            {
+                status = 31;
+                time_cnt = 0;
+            }
+            break;
+
+        case 31: // 冲水 (10 s)
+            if (time_cnt == 0)
+            {
+                TURN_ON(7);
+                GROUP_ON(12, 21);
+                TURN_ON(8);
+            }
+            if (++time_cnt >= 10)
+            {
+                TURN_OFF(8);
+                status = 32;
+                time_cnt = 0;
+            }
+            break;
+
+        case 32: // 结束
             ESP_LOGI(TAG, "mode 1 finished");
             for (size_t i = 0; i < 26; ++i)
                 TURN_OFF(i);
@@ -473,11 +623,7 @@ int mode0(void)
             return -1;
         }
 
-        /*--------------------------------------------------*/
         runtime++;
         delay_1s(); /* 延时 1 秒 */
     }
-
-    /* 不会到达这里 */
-    return 0;
 }

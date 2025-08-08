@@ -7,34 +7,13 @@ static const char *TAG = "MODE4";
 
 extern int do_pin[26];
 extern int di_pin[6];
-/*--------------------------------- GPIO 简易宏 --------------------------------*/
-#define TURN_ON(pin) set_do_pin((pin), 1)
-#define TURN_OFF(pin) set_do_pin((pin), 0)
-#define TOGGLE(pin) set_do_pin((pin), !get_do_pin((pin)))
 
-#define GROUP_ON(start, end)                         \
-    do                                               \
-    {                                                \
-        for (size_t _i = (start); _i <= (end); ++_i) \
-        {                                            \
-            TURN_ON(_i);                             \
-        }                                            \
-    } while (0)
 
-#define GROUP_OFF(start, end)                        \
-    do                                               \
-    {                                                \
-        for (size_t _i = (start); _i <= (end); ++_i) \
-        {                                            \
-            TURN_OFF(_i);                            \
-        }                                            \
-    } while (0)
-
-static inline void delay_1s(void) { vTaskDelay(pdMS_TO_TICKS(1000)); }
-
-/*-----------------------------------------------------------------------------
- *  mode4 : 25 min  中药洗（72 显式状态）
- *----------------------------------------------------------------------------*/
+/*******************************************************************************
+****@brief: MODE4 25min中药洗
+****@author: Luo
+****@date: 2025-08-08 15:49:57
+********************************************************************************/
 int mode4(void)
 {
     int status = 0;   /* 当前状态编号 0‑71 */

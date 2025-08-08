@@ -27,7 +27,7 @@
   "idf.customExtraVars": {
     "IDF_TARGET": "esp32s3"
   },
-  "idf.portWin": "COM29",
+  "idf.portWin": "COM14",
   "idf.flashType": "UART",
   "files.associations": {
     "ble_hs.h": "c",
@@ -52,7 +52,16 @@
     "ctrl_protocol.h": "c",
     "freertos.h": "c",
     "esp_log.h": "c",
-    "task.h": "c"
+    "task.h": "c",
+    "chrono": "c",
+    "deque": "c",
+    "list": "c",
+    "unordered_map": "c",
+    "vector": "c",
+    "format": "c",
+    "initializer_list": "c",
+    "text_encoding": "c",
+    "regex": "c"
   },
 
 }
