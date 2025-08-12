@@ -40,7 +40,7 @@ bool get_run_status(void);
 int get_mode_status(void);
 int set_mode(int mode);
 int check_status(void);
-void ctrl_protocol(const char *input,const char *output,int maxlen );
+void ctrl_protocol(char *input,char *output,int maxlen );
 
 
 

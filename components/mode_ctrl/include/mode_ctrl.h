@@ -64,6 +64,8 @@ static inline void delay_1s(void)
     vTaskDelay(pdMS_TO_TICKS(1000)); // pdMS_TO_TICKS 宏将毫秒转换为 FreeRTOS 时钟节
 }
 
+extern int do_pin[];
+
 esp_err_t pin_init(void);
 int set_do_pin(int index, int level);
 int get_do_pin(int index);

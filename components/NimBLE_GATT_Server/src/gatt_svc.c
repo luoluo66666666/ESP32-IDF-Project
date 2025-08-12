@@ -109,7 +109,8 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
             (struct ble_gatt_chr_def[]){/* LED characteristic */
                                         {.uuid = &my_custom_chr_uuid.u,
                                          .access_cb = data_access,
-                                         .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY,
+                                         .flags = BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY
+                                          | BLE_GATT_CHR_F_READ_ENC | BLE_GATT_CHR_F_WRITE_ENC,
                                          .val_handle = &my_custom_chr_val_handle},
                                         {0}},
     },
@@ -331,33 +332,48 @@ int gatt_svc_init(void)
     return 0;
 }
 
-// 处理BLE读写请求的回调函数
+
+// 判断连接是否加密
+bool is_connection_encrypted(uint16_t conn_handle)
+{
+    struct ble_gap_conn_desc desc;
+    int rc = ble_gap_conn_find(conn_handle, &desc);
+    if (rc != 0) {
+        ESP_LOGE(TAG, "ble_gap_conn_find failed with %d", rc);
+        return false;
+    }
+    return desc.sec_state.encrypted;
+}
+
+// data_access 增强版：加密连接才允许访问
 static int data_access(uint16_t conn_handle, uint16_t attr_handle,
                        struct ble_gatt_access_ctxt *ctxt, void *arg)
 {
+    // 先检查连接是否加密
+    if (!is_connection_encrypted(conn_handle)) {
+        ESP_LOGW(TAG, "Access denied: connection not encrypted (conn_handle=%d)", conn_handle);
+        return -1;
+    }
+
     int rc;
 
     switch (ctxt->op)
     {
     case BLE_GATT_ACCESS_OP_READ_CHR:
-        // 暂时不支持读取操作，返回错误码
+        // 这里示例不支持读，返回错误
         ESP_LOGW(TAG, "Read operation not supported");
         return BLE_ATT_ERR_UNLIKELY;
 
     case BLE_GATT_ACCESS_OP_WRITE_CHR:
     {
-        // 获取写入数据长度，防止超过队列项大小
         int len = OS_MBUF_PKTLEN(ctxt->om);
         if (len > QUEUE_ITEM_SIZE)
             len = QUEUE_ITEM_SIZE;
 
-        // 定义数据结构存放写入数据
         ble_data_t data = {0};
-        // 从mbuf复制数据到缓冲区
         os_mbuf_copydata(ctxt->om, 0, len, data.buf);
         data.len = len;
 
-        // 如果接收队列已初始化，尝试写入数据
         if (ble_rx_queue != NULL)
         {
             if (xQueueSend(ble_rx_queue, &data, 0) != pdPASS)
@@ -373,11 +389,11 @@ static int data_access(uint16_t conn_handle, uint16_t attr_handle,
     }
 
     default:
-        // 未知操作，打印错误并返回错误码
         ESP_LOGE(TAG, "Unknown operation: %d", ctxt->op);
         return BLE_ATT_ERR_UNLIKELY;
     }
 }
+
 
 // 发送任务：从发送队列中读取数据，并通过BLE通知发送给客户端
 void ble_send_task(void *param)
@@ -458,12 +474,3 @@ void ble_receive_task(void *param)
     vTaskDelete(NULL);
 }
 
-// void uart_send_task(void *param) {
-//     ble_data_t data;
-//     while (1) {
-//         if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE) {
-//             uart_write_bytes(UART_NUM_0, (const char *)data.buf, data.len);
-//             ESP_LOGI(TAG, "Sent to UART: %.*s", (int)data.len, data.buf);
-//         }
-//     }
-// }

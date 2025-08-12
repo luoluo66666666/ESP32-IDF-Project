@@ -152,17 +152,14 @@ int set_mode(int mode)
         // 先清除所有模式事件位，再置位对应模式
         xEventGroupClearBits(e_ctrl_protocol, MODE0_BIT | MODE1_BIT | MODE2_BIT | MODE3_BIT | MODE4_BIT | MODE5_UPPER_BIT | MODE5_LOWER_BIT | MODE_CLEAR);
         xEventGroupSetBits(e_ctrl_protocol, MODE0_BIT);
-        mode0(); // 调用对应模式函数
         break;
     case 1:
         xEventGroupClearBits(e_ctrl_protocol, MODE0_BIT | MODE1_BIT | MODE2_BIT | MODE3_BIT | MODE4_BIT | MODE5_UPPER_BIT | MODE5_LOWER_BIT | MODE_CLEAR);
         xEventGroupSetBits(e_ctrl_protocol, MODE1_BIT);
-        mode1();
         break;
     case 2:
         xEventGroupClearBits(e_ctrl_protocol, MODE0_BIT | MODE1_BIT | MODE2_BIT | MODE3_BIT | MODE4_BIT | MODE5_UPPER_BIT | MODE5_LOWER_BIT | MODE_CLEAR);
         xEventGroupSetBits(e_ctrl_protocol, MODE2_BIT);
-        mode2();
         break;
     case 3:
         xEventGroupClearBits(e_ctrl_protocol, MODE0_BIT | MODE1_BIT | MODE2_BIT | MODE3_BIT | MODE4_BIT | MODE5_UPPER_BIT | MODE5_LOWER_BIT | MODE_CLEAR);

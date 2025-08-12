@@ -45,6 +45,7 @@ int mode0(void)
         /* 暂停键，放在这里检测 (await_pause_and_restore) */
         if (get_di_pin(2) == 1) // 假设 DI1 是暂停键
         {
+            vTaskDelay(pdMS_TO_TICKS(50)); // 简单防抖50ms
             ESP_LOGI(TAG, "Paused");
             for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
             {

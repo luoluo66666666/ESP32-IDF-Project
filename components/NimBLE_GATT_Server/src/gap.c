@@ -137,6 +137,37 @@ static void start_advertising(void)
     ESP_LOGI(TAG, "advertising started!");
 }
 
+
+
+
+// 判断设备是否已配对
+#define MAX_BONDED_DEVICES 10
+static ble_addr_t bonded_devices[MAX_BONDED_DEVICES];
+static int bonded_count = 0;
+static bool is_device_bonded(const ble_addr_t *addr)
+{
+    for (int i = 0; i < bonded_count; i++) {
+        if (bonded_devices[i].type == addr->type &&
+            memcmp(bonded_devices[i].val, addr->val, 6) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+
+// 添加设备到已配对列表
+static void add_bonded_device(const ble_addr_t *addr)
+{
+    if (bonded_count < MAX_BONDED_DEVICES) {
+        bonded_devices[bonded_count++] = *addr;
+        ESP_LOGI(TAG, "Added bonded device %02X:%02X:%02X:%02X:%02X:%02X, total %d",
+                 addr->val[5], addr->val[4], addr->val[3],
+                 addr->val[2], addr->val[1], addr->val[0], bonded_count);
+    } else {
+        ESP_LOGW(TAG, "Bonded device list full");
+    }
+}
 /*
  * NimBLE applies an event-driven model to keep GAP service going
  * gap_event_handler is a callback function registered when calling
@@ -144,131 +175,158 @@ static void start_advertising(void)
  */
 static int gap_event_handler(struct ble_gap_event *event, void *arg)
 {
-    /* Local variables */
     int rc = 0;
     struct ble_gap_conn_desc desc;
 
-    /* Handle different GAP event */
     switch (event->type)
     {
-
-    /* Connect event */
     case BLE_GAP_EVENT_CONNECT:
-        /* A new connection was established or a connection attempt failed. */
         ESP_LOGI(TAG, "connection %s; status=%d",
                  event->connect.status == 0 ? "established" : "failed",
                  event->connect.status);
 
-        /* Connection succeeded */
-        if (event->connect.status == 0)
+        if (event->connect.status == 0) // 连接成功
         {
-            /* Check connection handle */
             rc = ble_gap_conn_find(event->connect.conn_handle, &desc);
             if (rc != 0)
             {
-                ESP_LOGE(TAG,
-                         "failed to find connection by handle, error code: %d",
-                         rc);
+                ESP_LOGE(TAG, "failed to find connection by handle, error code: %d", rc);
                 return rc;
             }
 
-            /* Print connection descriptor */
             print_conn_desc(&desc);
 
-            /* Try to update connection parameters */
-            struct ble_gap_upd_params params = {.itvl_min = desc.conn_itvl,
-                                                .itvl_max = desc.conn_itvl,
-                                                .latency = 3,
-                                                .supervision_timeout =
-                                                    desc.supervision_timeout};
+            struct ble_gap_upd_params params = {
+                .itvl_min = desc.conn_itvl,
+                .itvl_max = desc.conn_itvl,
+                .latency = 3,
+                .supervision_timeout = desc.supervision_timeout};
             rc = ble_gap_update_params(event->connect.conn_handle, &params);
             if (rc != 0)
             {
-                ESP_LOGE(
-                    TAG,
-                    "failed to update connection parameters, error code: %d",
-                    rc);
+                ESP_LOGE(TAG, "failed to update connection parameters, error code: %d", rc);
                 return rc;
             }
+
+            // 判断设备是否已配对
+            bool bonded = is_device_bonded(&desc.peer_id_addr);
+            if (bonded)
+            {
+                ESP_LOGI(TAG, "Device is bonded, skip security initiation.");
+            }
+            else
+            {
+                ESP_LOGI(TAG, "Device is NOT bonded, initiate security.");
+                rc = ble_gap_security_initiate(event->connect.conn_handle);
+                if (rc != 0)
+                {
+                    ESP_LOGE(TAG, "failed to initiate security, rc=%d", rc);
+                }
+                else
+                {
+                    // 新配对成功后，可以调用 add_bonded_device()，但配对成功事件需要你自己监听后添加
+                }
+            }
         }
-        /* Connection failed, restart advertising */
         else
         {
             start_advertising();
         }
         return rc;
 
-    /* Disconnect event */
     case BLE_GAP_EVENT_DISCONNECT:
-        /* A connection was terminated, print connection descriptor */
-        ESP_LOGI(TAG, "disconnected from peer; reason=%d",
-                 event->disconnect.reason);
-
-        /* Restart advertising */
+        ESP_LOGI(TAG, "disconnected from peer; reason=%d", event->disconnect.reason);
         start_advertising();
         return rc;
 
-    /* Connection parameters update event */
     case BLE_GAP_EVENT_CONN_UPDATE:
-        /* The central has updated the connection parameters. */
-        ESP_LOGI(TAG, "connection updated; status=%d",
-                 event->conn_update.status);
-
-        /* Print connection descriptor */
+        ESP_LOGI(TAG, "connection updated; status=%d", event->conn_update.status);
         rc = ble_gap_conn_find(event->conn_update.conn_handle, &desc);
         if (rc != 0)
         {
-            ESP_LOGE(TAG, "failed to find connection by handle, error code: %d",
-                     rc);
+            ESP_LOGE(TAG, "failed to find connection by handle, error code: %d", rc);
             return rc;
         }
         print_conn_desc(&desc);
         return rc;
 
-    /* Advertising complete event */
     case BLE_GAP_EVENT_ADV_COMPLETE:
-        /* Advertising completed, restart advertising */
-        ESP_LOGI(TAG, "advertise complete; reason=%d",
-                 event->adv_complete.reason);
+        ESP_LOGI(TAG, "advertise complete; reason=%d", event->adv_complete.reason);
         start_advertising();
         return rc;
 
-    /* Notification sent event */
     case BLE_GAP_EVENT_NOTIFY_TX:
-        if ((event->notify_tx.status != 0) &&
-            (event->notify_tx.status != BLE_HS_EDONE))
+        if ((event->notify_tx.status != 0) && (event->notify_tx.status != BLE_HS_EDONE))
         {
-            /* Print notification info on error */
-            ESP_LOGI(TAG,
-                     "notify event; conn_handle=%d attr_handle=%d "
-                     "status=%d is_indication=%d",
+            ESP_LOGI(TAG, "notify event; conn_handle=%d attr_handle=%d status=%d is_indication=%d",
                      event->notify_tx.conn_handle, event->notify_tx.attr_handle,
                      event->notify_tx.status, event->notify_tx.indication);
         }
         return rc;
 
-    /* Subscribe event */
     case BLE_GAP_EVENT_SUBSCRIBE:
-        /* Print subscription info to log */
-        ESP_LOGI(TAG,
-                 "subscribe event; conn_handle=%d attr_handle=%d "
-                 "reason=%d prevn=%d curn=%d previ=%d curi=%d",
+        ESP_LOGI(TAG, "subscribe event; conn_handle=%d attr_handle=%d reason=%d prevn=%d curn=%d previ=%d curi=%d",
                  event->subscribe.conn_handle, event->subscribe.attr_handle,
                  event->subscribe.reason, event->subscribe.prev_notify,
                  event->subscribe.cur_notify, event->subscribe.prev_indicate,
                  event->subscribe.cur_indicate);
-
-        /* GATT subscribe event callback */
         gatt_svr_subscribe_cb(event);
         return rc;
 
-    /* MTU update event */
     case BLE_GAP_EVENT_MTU:
-        /* Print MTU update info to log */
         ESP_LOGI(TAG, "mtu update event; conn_handle=%d cid=%d mtu=%d",
                  event->mtu.conn_handle, event->mtu.channel_id,
                  event->mtu.value);
         return rc;
+
+    case BLE_GAP_EVENT_ENC_CHANGE:
+        if (event->enc_change.status == 0)
+        {
+            ESP_LOGI(TAG, "connection encrypted!");
+            // 这里可以认为配对成功了，添加设备到bonded_devices
+            rc = ble_gap_conn_find(event->enc_change.conn_handle, &desc);
+            if (rc == 0) {
+                add_bonded_device(&desc.peer_id_addr);
+            }
+        }
+        else
+        {
+            ESP_LOGE(TAG, "connection encryption failed, status: %d", event->enc_change.status);
+        }
+        return rc;
+
+    case BLE_GAP_EVENT_REPEAT_PAIRING:
+        rc = ble_gap_conn_find(event->repeat_pairing.conn_handle, &desc);
+        if (rc != 0)
+        {
+            ESP_LOGE(TAG, "failed to find connection, error code %d", rc);
+            return rc;
+        }
+        ble_store_util_delete_peer(&desc.peer_id_addr);
+        ESP_LOGI(TAG, "Repeat pairing, deleting old bond and retrying");
+        return BLE_GAP_REPEAT_PAIRING_RETRY;
+
+    case BLE_GAP_EVENT_PASSKEY_ACTION:
+        if (event->passkey.params.action == BLE_SM_IOACT_DISP)
+        {
+            uint32_t fixed_passkey = 123456;
+            ESP_LOGI(TAG, "Use fixed passkey %06" PRIu32 " on the peer device", fixed_passkey);
+
+            struct ble_sm_io pkey = {0};
+            pkey.action = event->passkey.params.action;
+            pkey.passkey = fixed_passkey;
+
+            int rc = ble_sm_inject_io(event->passkey.conn_handle, &pkey);
+            if (rc != 0)
+            {
+                ESP_LOGE(TAG, "Failed to inject fixed passkey, rc=%d", rc);
+                return rc;
+            }
+        }
+        return 0;
+
+    default:
+        break;
     }
 
     return rc;
@@ -311,6 +369,11 @@ void adv_init(void)
     start_advertising();
 }
 
+/*******************************************************************************
+****@brief: 通用访问规范 (Generic Access Profile, GAP init)
+****@author: Luo
+****@date: 2025-08-11 08:46:35
+********************************************************************************/
 int gap_init(void)
 {
     /* Local variables */
@@ -365,6 +428,13 @@ static void nimble_host_config_init(void)
     ble_hs_cfg.gatts_register_cb = gatt_svr_register_cb;
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
 
+    /* Security manager configuration */
+    ble_hs_cfg.sm_io_cap = BLE_HS_IO_DISPLAY_ONLY;
+    ble_hs_cfg.sm_bonding = 1;
+    ble_hs_cfg.sm_mitm = 1;
+    ble_hs_cfg.sm_our_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+    ble_hs_cfg.sm_their_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+
     /* Store host configuration */
     ble_store_config_init();
 }
@@ -404,6 +474,11 @@ static void heart_rate_task(void *param)
     vTaskDelete(NULL);
 }
 
+/*******************************************************************************
+****@brief: 蓝牙任务
+****@author: Luo
+****@date: 2025-08-11 08:36:17
+********************************************************************************/
 void ble_task(void)
 {
     /* Local variables */

@@ -8,7 +8,7 @@
 
 #include "esp_log.h"
 
-#include "mode_ctrl.h" // 引入模式控制相关函数的头文件
+#include "mode_ctrl.h"                         // 引入模式控制相关函数的头文件
 extern EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 // EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
@@ -123,7 +123,6 @@ int check_status(void)
     return 0; // 可以切换
 }
 
-
 /*******************************************************************************
 ****函数功能: 设置模式，传入参数mode是bit位标志
 ****入口参数: mode:
@@ -132,7 +131,7 @@ int check_status(void)
 ********************************************************************************/
 int set_mode(int mode)
 {
-    EventBits_t event_bits = xEventGroupGetBits(event_ctrl_protocol);
+    // EventBits_t event_bits = xEventGroupGetBits(event_ctrl_protocol);
     if (event_ctrl_protocol == NULL)
     {
         ESP_LOGE(TAG, "Event group not initialized");
@@ -182,6 +181,7 @@ int set_mode(int mode)
         break;
     case 6:
         xEventGroupSetBits(event_ctrl_protocol, Mode5_LOWER_BIT);
+        break;
     default:
         ESP_LOGE(TAG, "Invalid mode: %d", mode);
         return -1; // 返回-1表示无效模式
@@ -220,18 +220,76 @@ mode_cmd mode_command[] =
 ****作者名称: Luo
 ****创建日期: 2025-07-22 14:23:06
 ********************************************************************************/
-void ctrl_protocol(const char *input, const char *output, int maxlen)
+extern int do_pin[26];
+void ctrl_protocol(char *input, char *output, int maxlen)
 {
     ESP_LOGI(TAG, "Received command: %s", input);
 
+    /* 1. 模式查询命令 */
     if (strncmp(input, "CMD:MODE_GET", strnlen("CMD:MODE_GET", maxlen)) == 0)
     {
-        check_status(); // 检查当前状态
-        snprintf(output, maxlen, "CMD:MODE_GET,OK\r\n"); // 也返回响应
+        check_status();                                  // 检查当前模式状态
+        snprintf(output, maxlen, "CMD:MODE_GET,OK\r\n"); // 回复模式查询成功
         return;
     }
+
+    /* 2. 全部 DO 控制命令：ALL ON / ALL OFF */
+    if (strcasecmp(input, "all on") == 0)
+    {
+        for (int i = 0; i < (sizeof(do_pin) / sizeof(do_pin[0])); i++)
+        {
+            set_do_pin(i, 1); // 打开所有 DO
+        }
+        snprintf(output, maxlen, "ALL,ON\r\n");
+        return;
+    }
+    if (strcasecmp(input, "all off") == 0)
+    {
+        for (int i = 0; i < (sizeof(do_pin) / sizeof(do_pin[0])); i++)
+        {
+            set_do_pin(i, 0); // 关闭所有 DO
+        }
+        snprintf(output, maxlen, "ALL,OFF\r\n");
+        return;
+    }
+
+    /* 3. 单路 DO 控制命令：格式 doX on/off/toggle */
+    if (strncasecmp(input, "do", 2) == 0) // 检查前缀 "do"
+    {
+        int do_index = -1;       // DO 编号
+        char action[8] = {0};    // 动作字符串（on/off/toggle）
+
+        // 解析命令格式，例如 "do1 on" → do_index=1, action="on"
+        if (sscanf(input, "do%d %7s", &do_index, action) == 2)
+        {
+            // 检查 DO 编号是否合法
+            if (do_index >= 0 && do_index < (sizeof(do_pin) / sizeof(do_pin[0])))
+            {
+                if (strcasecmp(action, "on") == 0)
+                {
+                    set_do_pin(do_index, 1);
+                    snprintf(output, maxlen, "do%d,ON\r\n", do_index);
+                    return;
+                }
+                else if (strcasecmp(action, "off") == 0)
+                {
+                    set_do_pin(do_index, 0);
+                    snprintf(output, maxlen, "do%d,OFF\r\n", do_index);
+                    return;
+                }
+                else if (strcasecmp(action, "toggle") == 0)
+                {
+                    set_do_pin(do_index, !get_do_pin(do_index)); // 翻转当前状态
+                    snprintf(output, maxlen, "do%d,TOGGLED\r\n", do_index);
+                    return;
+                }
+            }
+        }
+    }
+
+    /* 4. 模式切换命令 */
     for (int i = 0; i < MODE_CMD_COUNT; i++)
-    {   
+    {
         if (strncmp(input, mode_command[i].cmd, strnlen(mode_command[i].cmd, maxlen)) == 0)
         {
             int mode = set_mode(mode_command[i].mode_index);
@@ -245,12 +303,10 @@ void ctrl_protocol(const char *input, const char *output, int maxlen)
             }
             return;
         }
-
     }
 
+    /* 5. 未知命令 */
     ESP_LOGE(TAG, "Invalid command");
     snprintf(output, maxlen, "CMD:ERR\r\n");
     return;
 }
-
-

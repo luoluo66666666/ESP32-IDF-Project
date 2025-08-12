@@ -67,6 +67,7 @@ void mode_control_task(void *pvParameters)
 
 void app_main(void)
 {
+    pin_init();
     ctrl_protocol_init(); // Initialize the control protocol
     Wifi_task();          // 启动wifi模块
 
