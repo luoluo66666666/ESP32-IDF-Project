@@ -7,6 +7,7 @@
 #include "gap.h"
 #include "ctrl_protocol.h"
 #include "mode_ctrl.h"
+#include <esp_log.h>
 
 static const char *TAG = "current MODE";
 
