@@ -1,4 +1,12 @@
 {
+    "idf.espIdfPathWin": "d:\\ESP-IDF\\v5.4.2\\esp-idf",
+    "idf.toolsPathWin": "D:\\ESP.SSIF",
+    "idf.pythonInstallPath": "d:\\ESP.SSIF\\tools\\idf-python\\3.11.2\\python.exe",
+    "files.associations": {
+        "esp_log.h": "c",
+        "mode_ctrl.h": "c",
+        "ctrl_protocol.h": "c"
+    },
     "idf.flashType": "UART",
-    "idf.portWin": "COM5"
+    "idf.portWin": "COM14"
 }
