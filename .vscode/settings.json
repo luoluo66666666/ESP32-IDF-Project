@@ -5,7 +5,11 @@
     "files.associations": {
         "esp_log.h": "c",
         "mode_ctrl.h": "c",
-        "ctrl_protocol.h": "c"
+        "ctrl_protocol.h": "c",
+        "stdio.h": "c",
+        "gpio.h": "c",
+        "freertos.h": "c",
+        "task.h": "c"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM14"

@@ -6,4 +6,4 @@ idf_component_register(SRCS "mode_ctrl.c"
     "mode4.c"
     "mode5.c"
     INCLUDE_DIRS "include"
-    REQUIRES driver)
+    REQUIRES driver ctrl_protocol)

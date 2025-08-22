@@ -14,6 +14,61 @@ extern EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理
 const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
 
 /*******************************************************************************
+****@brief: 左右撑杆电机控制
+*每个撑杆电机接入正负极,每个极性控制一个方向，两个io不能同时开启，切换时需关闭io输出
+*左右DO0 DO1 上下DO20 21
+****@author: Luo
+****@date: 2025-08-19 15:21:44
+********************************************************************************/
+#define POLE_EVENT_BIT (1 << 0)
+EventGroupHandle_t event_motor_ctrl;
+void Pole_motor_control_task(void *p)
+{
+    while (1)
+    {
+        // 等待 RUN_BIT
+        EventBits_t motor_bits = xEventGroupWaitBits(
+            event_motor_ctrl,
+            Motor_RUN_BIT,
+            pdFALSE,  // 不清除 RUN_BIT
+            pdFALSE,
+            portMAX_DELAY);
+
+        if (motor_bits & Motor_RUN_BIT)
+        {
+            ESP_LOGI(TAG, "Motor RUN detected, entering loop");
+            
+            while (1)
+            {
+                // 伸出
+                TURN_OFF(0); TURN_OFF(20);
+                TURN_ON(1); TURN_ON(21);
+                vTaskDelay(pdMS_TO_TICKS(5000));
+
+                TURN_OFF(1); TURN_OFF(21);
+                vTaskDelay(pdMS_TO_TICKS(50));
+
+                // 缩回
+                TURN_ON(0); TURN_ON(20);
+                vTaskDelay(pdMS_TO_TICKS(5000));
+
+                TURN_OFF(0); TURN_OFF(20);
+                vTaskDelay(pdMS_TO_TICKS(50));
+
+                // 检查 STOP_BIT
+                EventBits_t stop_bits = xEventGroupGetBits(event_motor_ctrl);
+                if (stop_bits & Motor_STOP_BIT)
+                {
+                    xEventGroupClearBits(event_motor_ctrl, Motor_STOP_BIT | Motor_RUN_BIT);
+                    ESP_LOGI(TAG, "Motor STOP detected, exit loop");
+                    break;
+                }
+            }
+        }
+    }
+}
+
+/*******************************************************************************
 ****函数功能: 初始化控制协议
 ****作者名称: Luo
 ****创建日期: 2025-07-22 08:53:35
@@ -23,6 +78,7 @@ const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
 void ctrl_protocol_init(void)
 {
     event_ctrl_protocol = xEventGroupCreate(); // 创建事件组
+    event_motor_ctrl = xEventGroupCreate();
     if (event_ctrl_protocol == NULL)
     {
         ESP_LOGE(TAG, "Failed to create event group");
@@ -32,7 +88,27 @@ void ctrl_protocol_init(void)
     xEventGroupClearBits(event_ctrl_protocol, Mode0_BIT | Mode1_BIT | Mode2_BIT |
                                                   Mode3_BIT | Mode4_BIT | Mode5_UPPER_BIT | Mode5_LOWER_BIT |
                                                   RUN_BIT | FAULT_BIT);
+    xEventGroupClearBits(event_motor_ctrl, Motor_RUN_BIT | Motor_STOP_BIT | Motor_GET_BIT);
 }
+
+
+/*******************************************************************************
+****@brief:撑杆的运行和停止 
+****@author: Luo
+****@date: 2025-08-21 16:37:49
+********************************************************************************/
+int motor_run(void)
+{
+    xEventGroupSetBits(event_motor_ctrl, Motor_RUN_BIT);
+    return 0;
+}
+
+int motor_stop(void)
+{
+    xEventGroupSetBits(event_motor_ctrl, Motor_STOP_BIT);
+    return 0;
+}
+
 
 /*******************************************************************************
 ****函数功能: 获取故障状态
@@ -256,8 +332,8 @@ void ctrl_protocol(char *input, char *output, int maxlen)
     /* 3. 单路 DO 控制命令：格式 doX on/off/toggle */
     if (strncasecmp(input, "do", 2) == 0) // 检查前缀 "do"
     {
-        int do_index = -1;       // DO 编号
-        char action[8] = {0};    // 动作字符串（on/off/toggle）
+        int do_index = -1;    // DO 编号
+        char action[8] = {0}; // 动作字符串（on/off/toggle）
 
         // 解析命令格式，例如 "do1 on" → do_index=1, action="on"
         if (sscanf(input, "do%d %7s", &do_index, action) == 2)

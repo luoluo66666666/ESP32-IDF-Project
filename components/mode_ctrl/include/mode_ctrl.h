@@ -71,7 +71,7 @@ int set_do_pin(int index, int level);
 int get_do_pin(int index);
 int get_di_pin(int index);
 
-int mode0(void);
+void start_mode0(void);
 int mode1(void);
 int mode2(void);
 int mode3(void);

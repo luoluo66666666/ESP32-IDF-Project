@@ -11,6 +11,8 @@
 
 static const char *TAG = "current MODE";
 
+extern void Pole_motor_control_task(void *p);
+
 EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 
 void mode_control_task(void *pvParameters)
@@ -27,7 +29,7 @@ void mode_control_task(void *pvParameters)
         {
         case Mode0_BIT:
             ESP_LOGI(TAG, "Mode 0 activated");
-            mode0();                                              // 调用模式0的控制函数
+            start_mode0();                                            // 调用模式0的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode0_BIT); // 手动清除事件位
             break;
         case Mode1_BIT:
@@ -76,4 +78,6 @@ void app_main(void)
 
     // 创建控制任务
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
+    xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
+
 }
