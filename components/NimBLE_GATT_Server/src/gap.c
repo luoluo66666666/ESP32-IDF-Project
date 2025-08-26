@@ -17,6 +17,13 @@ static void print_conn_desc(struct ble_gap_conn_desc *desc);
 static void start_advertising(void);
 static int gap_event_handler(struct ble_gap_event *event, void *arg);
 
+/* 加入安全宏定义 */
+#ifndef ENABLE_SECURITY
+    #define ENABLE_SECURITY 0   // 1 表示启用安全，0 表示禁用
+
+#endif
+
+
 /* Private variables */
 static uint8_t own_addr_type;
 static uint8_t addr_val[6] = {0};
@@ -138,8 +145,6 @@ static void start_advertising(void)
 }
 
 
-
-
 // 判断设备是否已配对
 #define MAX_BONDED_DEVICES 10
 static ble_addr_t bonded_devices[MAX_BONDED_DEVICES];
@@ -173,6 +178,7 @@ static void add_bonded_device(const ble_addr_t *addr)
  * gap_event_handler is a callback function registered when calling
  * ble_gap_adv_start API and called when a GAP event arrives
  */
+
 static int gap_event_handler(struct ble_gap_event *event, void *arg)
 {
     int rc = 0;
@@ -200,7 +206,8 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
                 .itvl_min = desc.conn_itvl,
                 .itvl_max = desc.conn_itvl,
                 .latency = 3,
-                .supervision_timeout = desc.supervision_timeout};
+                .supervision_timeout = desc.supervision_timeout
+            };
             rc = ble_gap_update_params(event->connect.conn_handle, &params);
             if (rc != 0)
             {
@@ -208,6 +215,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
                 return rc;
             }
 
+#if ENABLE_SECURITY
             // 判断设备是否已配对
             bool bonded = is_device_bonded(&desc.peer_id_addr);
             if (bonded)
@@ -222,11 +230,11 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
                 {
                     ESP_LOGE(TAG, "failed to initiate security, rc=%d", rc);
                 }
-                else
-                {
-                    // 新配对成功后，可以调用 add_bonded_device()，但配对成功事件需要你自己监听后添加
-                }
+                // 新配对成功后，需要在 BLE_GAP_EVENT_ENC_CHANGE 里调用 add_bonded_device()
             }
+#else
+            ESP_LOGI(TAG, "Security disabled: no pairing required.");
+#endif
         }
         else
         {
@@ -279,13 +287,14 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
                  event->mtu.value);
         return rc;
 
+#if ENABLE_SECURITY
     case BLE_GAP_EVENT_ENC_CHANGE:
         if (event->enc_change.status == 0)
         {
             ESP_LOGI(TAG, "connection encrypted!");
-            // 这里可以认为配对成功了，添加设备到bonded_devices
             rc = ble_gap_conn_find(event->enc_change.conn_handle, &desc);
-            if (rc == 0) {
+            if (rc == 0)
+            {
                 add_bonded_device(&desc.peer_id_addr);
             }
         }
@@ -324,6 +333,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
             }
         }
         return 0;
+#endif
 
     default:
         break;
@@ -331,6 +341,7 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg)
 
     return rc;
 }
+
 
 /* Public functions */
 void adv_init(void)
@@ -428,12 +439,21 @@ static void nimble_host_config_init(void)
     ble_hs_cfg.gatts_register_cb = gatt_svr_register_cb;
     ble_hs_cfg.store_status_cb = ble_store_util_status_rr;
 
-    /* Security manager configuration */
+#if ENABLE_SECURITY
+    /* 启用安全模式 */
     ble_hs_cfg.sm_io_cap = BLE_HS_IO_DISPLAY_ONLY;
     ble_hs_cfg.sm_bonding = 1;
     ble_hs_cfg.sm_mitm = 1;
     ble_hs_cfg.sm_our_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
     ble_hs_cfg.sm_their_key_dist |= BLE_SM_PAIR_KEY_DIST_ENC | BLE_SM_PAIR_KEY_DIST_ID;
+#else
+    /* 禁用安全模式：无配对/加密 */
+    ble_hs_cfg.sm_io_cap = 0;
+    ble_hs_cfg.sm_bonding = 0;
+    ble_hs_cfg.sm_mitm = 0;
+    ble_hs_cfg.sm_our_key_dist = 0;
+    ble_hs_cfg.sm_their_key_dist = 0;
+#endif
 
     /* Store host configuration */
     ble_store_config_init();
@@ -533,6 +553,7 @@ void ble_task(void)
     nimble_host_config_init();
     ble_queue_init();
 
+
     /* Start NimBLE host task thread and return */
     xTaskCreate(nimble_host_task, "NimBLE Host", 4 * 1024, NULL, 5, NULL);
     // xTaskCreate(heart_rate_task, "Heart Rate", 4*1024, NULL, 5, NULL);
@@ -542,3 +563,5 @@ void ble_task(void)
 
     return;
 }
+
+

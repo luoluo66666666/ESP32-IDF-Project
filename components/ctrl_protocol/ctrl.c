@@ -149,7 +149,7 @@ int get_mode_status(void)
         return -1;
 
     EventBits_t event_bits = xEventGroupGetBits(event_ctrl_protocol);
-    if (event_bits & Mode0_BIT)
+    if (event_bits & Mode0_BIT)     
         return 0;
     if (event_bits & Mode1_BIT)
         return 1;

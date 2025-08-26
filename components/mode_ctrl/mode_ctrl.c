@@ -3,6 +3,10 @@
 #include "soc/gpio_reg.h"
 #include "esp_log.h"
 #include <stdio.h>
+#include <inttypes.h> 
+#include "gatt_svc.h"
+
+extern QueueHandle_t ble_tx_queue;
 
 int do_pin[] = {
     GPIO_NUM_1,
@@ -43,11 +47,100 @@ int di_pin[] = {
 };
 
 static const char *TAG = "MODE_CTRL";
+adc_continuous_handle_t adc_handle = NULL;
+static const char *FLOW = "flow_sensor";
+
+// 计数脉冲的全局变量（可在任务中读取）
+volatile uint32_t flow_pulse_count = 0;
+
+/* ---------- flow_isr_handler ----------
+ * GPIO 中断服务函数，每当水流量计产生上升沿时调用
+ */
+static void IRAM_ATTR flow_isr_handler(void *arg)
+{
+    // 简单累加脉冲计数
+    flow_pulse_count++;
+}
+
+/* ---------- sensor_task ----------
+ * FreeRTOS 任务函数，用于周期性处理流量计脉冲数据
+ */
+// void sensor_task(void *pvParameters)
+// {
+//     uint32_t last_count = 0;
+
+//     while (1)
+//     {
+//         uint32_t count = flow_pulse_count;
+
+//         if (count == last_count)  // 有新脉冲才发送
+//         {
+//             uint32_t delta = count - last_count;
+//             last_count = count;
+
+//             // 构造发送数据字符串
+//             char data_str[32];
+//             int len = snprintf(data_str, sizeof(data_str), "count:%" PRIu32 ",delta:%" PRIu32, count, delta);
+
+//             // 放入发送队列
+//             ble_data_t tx_data = {0};
+//             memcpy(tx_data.buf, data_str, len);
+//             tx_data.len = len;
+
+//             if (xQueueSend(ble_tx_queue, &tx_data, 10 / portTICK_PERIOD_MS) != pdPASS)
+//             {
+//                 ESP_LOGW(TAG, "BLE TX queue full, data dropped");
+//             }
+//             else
+//             {
+//                 ESP_LOGI(TAG, "Flow data queued for BLE: %s", data_str);
+//             }
+//         }
+
+//         vTaskDelay(pdMS_TO_TICKS(50)); // 50ms 轮询
+//     }
+// }
+extern uint16_t custom_chr_conn_handle;
+extern bool custom_notify_enabled;
+// sensor_task 改写
+void sensor_task(void *pvParameters)
+{
+    uint32_t test_count = 0;
+    uint32_t test_delta = 1000;
+
+    while (1)
+    {
+        char data_str[32];
+        int len = snprintf(data_str, sizeof(data_str), "count:%" PRIu32 ",delta:%" PRIu32, test_count, test_delta);
+
+        ble_data_t tx_data = {0};
+        memcpy(tx_data.buf, data_str, len);
+        tx_data.len = len;
+
+        // 直接放入 TX 队列，不管订阅是否启用
+        if (xQueueSend(ble_tx_queue, &tx_data, 10 / portTICK_PERIOD_MS) != pdPASS)
+        {
+            ESP_LOGW(TAG, "BLE TX queue full, data dropped");
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Test BLE data queued: %s", data_str);
+        }
+        test_count ++;
+        test_delta ++;
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
+
 
 /*******************************************************************************
-****@brief 初始化所有 DO（输出）和 DI（输入）引脚
+****@brief 初始化所有 DO（输出）和 DI（输入）引脚 
 * 1. 先遍历 DO 引脚数组，依次复位引脚并设置为输出模式
 * 2. 再遍历 DI 引脚数组，依次复位引脚、设置为输入模式并开启上
+* 3. ADC连续采样，设置ADC1通道5对应GPIO6(di_pin[2])
+* 4. 采用中断检测水流计脉冲信号 di_pin[3]
 ****@author: Luo
 ****@date: 2025-08-08 14:39:09
 ********************************************************************************/
@@ -61,23 +154,26 @@ esp_err_t pin_init(void)
         // 1. 将引脚切换为 GPIO 模式，释放所有外设复用
         esp_rom_gpio_pad_select_gpio(do_pin[i]);
 
-        // 2. 复位引脚为默认状态（禁用所有功能，恢复为普通GPIO）
+        // 2. 复位引脚为默认状态（禁用所有功能，恢复为普通 GPIO）
         ret = gpio_reset_pin(do_pin[i]);
-        if (ret != ESP_OK) {
+        if (ret != ESP_OK)
+        {
             ESP_LOGE(TAG, "Failed to reset pin %d: %s", do_pin[i], esp_err_to_name(ret));
             return ret; // 如果复位失败，直接返回错误
         }
 
         // 3. 设置引脚方向为输出
         ret = gpio_set_direction(do_pin[i], GPIO_MODE_OUTPUT);
-        if (ret != ESP_OK) {
+        if (ret != ESP_OK)
+        {
             ESP_LOGE(TAG, "Failed to set direction for pin %d: %s", do_pin[i], esp_err_to_name(ret));
             return ret; // 设置方向失败，返回错误
         }
 
         // 4. 设置引脚初始输出电平为低，防止悬空
         ret = gpio_set_level(do_pin[i], 0);
-        if (ret != ESP_OK) {
+        if (ret != ESP_OK)
+        {
             ESP_LOGE(TAG, "Failed to set level for pin %d: %s", do_pin[i], esp_err_to_name(ret));
             return ret; // 设置电平失败，返回错误
         }
@@ -91,27 +187,88 @@ esp_err_t pin_init(void)
 
         // 2. 复位引脚为默认状态
         ret = gpio_reset_pin(di_pin[i]);
-        if (ret != ESP_OK) {
+        if (ret != ESP_OK)
+        {
             ESP_LOGE(TAG, "Failed to reset pin %d: %s", di_pin[i], esp_err_to_name(ret));
             return ret; // 失败则返回
         }
 
         // 3. 设置引脚方向为输入
         ret = gpio_set_direction(di_pin[i], GPIO_MODE_INPUT);
-        if (ret != ESP_OK) {
+        if (ret != ESP_OK)
+        {
             ESP_LOGE(TAG, "Failed to set direction for pin %d: %s", di_pin[i], esp_err_to_name(ret));
             return ret;
         }
 
         // 4. 设置内部上拉电阻，防止输入悬空产生干扰
         ret = gpio_set_pull_mode(di_pin[i], GPIO_PULLUP_ENABLE);
-        if (ret != ESP_OK) {
+        if (ret != ESP_OK)
+        {
             ESP_LOGE(TAG, "Failed to set pull mode for pin %d: %s", di_pin[i], esp_err_to_name(ret));
             return ret;
         }
     }
 
-    return ret; // 所有引脚成功初始化返回 ESP_OK
+    return ret;
+}
+
+
+
+esp_err_t sensor_init(void)
+{
+      /* -------------- 初始化功能引脚 -------------- */
+      esp_err_t ret = ESP_OK; // 保存每一步操作的返回状态
+    /* ---------- ADC 连续采样 ---------- */
+    adc_continuous_handle_cfg_t adc_cfg = {
+        .max_store_buf_size = 1024,  // ADC 内部环形缓冲区大小
+        .conv_frame_size = READ_LEN, // 每次转换的数据长度
+    };
+    // 创建 ADC 连续采样句柄
+    ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_cfg, &adc_handle));
+
+    adc_continuous_config_t dig_cfg = {
+        .sample_freq_hz = ADC_SAMPLE_FREQ_HZ,   // ADC 采样频率
+        .conv_mode = ADC_CONV_SINGLE_UNIT_1,    // 单次转换模式，这里只使用 ADC1
+        .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2, // 数字输出格式
+    };
+
+    // 配置 ADC1 channel 5，对应 GPIO6
+    adc_digi_pattern_config_t adc_pattern = {
+        .atten = ADC_ATTEN_DB_12,          // 输入衰减 12dB，输入电压范围 0~3.3V
+        .channel = ADC_CHANNEL_5,         // ADC1 通道 5 对应GPIO6
+        .unit = ADC_UNIT_1,                // ADC 单元 1
+        .bit_width = ADC_BITWIDTH_12, // 默认位宽 12bit
+    };
+
+    dig_cfg.pattern_num = 1;            // 模式数量为 1
+    dig_cfg.adc_pattern = &adc_pattern; // 指向配置模式
+
+    // 配置 ADC 并启动连续采样
+    ESP_ERROR_CHECK(adc_continuous_config(adc_handle, &dig_cfg));
+    ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
+
+    ESP_LOGI(TAG, "ADC continuous sampling started on unit %d, channel %d (GPIO%d)",
+             adc_pattern.unit, adc_pattern.channel, di_pin[2]); // GPIO6 对应 ADC1_CHANNEL_5
+
+    /* ---------- 初始化水流量计脉冲输入（中断） ---------- */
+    gpio_config_t io_conf = {
+        .intr_type = GPIO_INTR_POSEDGE,    // 上升沿触发中断
+        .mode = GPIO_MODE_INPUT,           // 输入模式
+        .pin_bit_mask = 1ULL << di_pin[3], // 对应 di_pin[3] 的引脚
+        .pull_up_en = GPIO_PULLUP_ENABLE,  // 内部上拉
+    };
+    gpio_config(&io_conf);
+    ESP_LOGI(TAG, "Flow sensor input initialized on pin %d", di_pin[3]);
+
+    // 注册中断服务
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(di_pin[3], flow_isr_handler, NULL);
+
+    // 创建 FreeRTOS 任务用于处理流量传感器
+    xTaskCreate(sensor_task, "flow_sensor_task", 4096, NULL, 5, NULL);
+
+    return ret;
 }
 
 

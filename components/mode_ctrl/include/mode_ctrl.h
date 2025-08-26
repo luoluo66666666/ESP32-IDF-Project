@@ -3,7 +3,16 @@
 
 #include "driver/gpio.h"
 #include "freertos/FreeRTOS.h"
+#include "esp_adc/adc_continuous.h"
 
+
+/*-----------------------------------------------------------
+ *  DC宏定义
+ *----------------------------------------------------------*/
+#define READ_LEN            64          // 一次读取的转换数据长度
+#define ADC_SAMPLE_FREQ_HZ  1000        // 采样频率 1kHz，可根据需要调整
+#define ADC_CHANNEL         ADC_CHANNEL_0   // ADC1 通道 0
+#define ADC_UNIT            ADC_UNIT_1       // ADC 单元
 /*-----------------------------------------------------------
  *  控制数字输出引脚的辅助宏
  *----------------------------------------------------------*/
@@ -67,6 +76,7 @@ static inline void delay_1s(void)
 extern int do_pin[];
 
 esp_err_t pin_init(void);
+esp_err_t sensor_init(void);
 int set_do_pin(int index, int level);
 int get_do_pin(int index);
 int get_di_pin(int index);

@@ -9,7 +9,11 @@
         "stdio.h": "c",
         "gpio.h": "c",
         "freertos.h": "c",
-        "task.h": "c"
+        "task.h": "c",
+        "adc.h": "c",
+        "nimble_port_freertos.h": "c",
+        "gpio_reg.h": "c",
+        "adc_continuous.h": "c"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM14"
