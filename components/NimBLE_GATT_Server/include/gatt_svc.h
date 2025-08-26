@@ -17,7 +17,7 @@
 
 /* 创建发送和接收队列 */
 #define QUEUE_LENGTH 20
-#define QUEUE_ITEM_SIZE 1024
+#define QUEUE_ITEM_SIZE 216 //数值不宜过大，否则造成栈溢出
 
 
 typedef struct

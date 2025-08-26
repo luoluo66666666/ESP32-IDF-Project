@@ -11,9 +11,10 @@
 
 #include "ctrl_protocol.h" // Include the ctrl_protocol header for ctrl_protocol functions
 
+char response[QUEUE_ITEM_SIZE];
 
 /* --------------------------- 定义是否启用 BLE 加密访问 --------------------------- */
-#define BLE_ENCRYPTION_REQUIRED 0  // 1：启用加密访问  0：不要求加密
+#define BLE_ENCRYPTION_REQUIRED 0 // 1：启用加密访问  0：不要求加密
 
 QueueHandle_t ble_tx_queue = NULL;
 QueueHandle_t ble_rx_queue = NULL;
@@ -44,7 +45,6 @@ void ble_queue_init(void)
     ESP_LOGI(TAG, "BLE queues initialized successfully");
 }
 
-
 /* Private function declarations */
 static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
                                  struct ble_gatt_access_ctxt *ctxt, void *arg);
@@ -65,13 +65,12 @@ bool heart_rate_ind_status = false;
 uint16_t custom_chr_conn_handle = 0;
 bool custom_notify_enabled = false;
 
-
 /* Automation IO service */
 // static const ble_uuid16_t auto_io_svc_uuid = BLE_UUID16_INIT(0x1815);
 // static uint16_t led_chr_val_handle;
 // static const ble_uuid128_t led_chr_uuid =
-    // BLE_UUID128_INIT(0x23, 0xd1, 0xbc, 0xea, 0x5f, 0x78, 0x23, 0x15, 0xde, 0xef,
-                    //  0x12, 0x12, 0x25, 0x15, 0x00, 0x00);
+// BLE_UUID128_INIT(0x23, 0xd1, 0xbc, 0xea, 0x5f, 0x78, 0x23, 0x15, 0xde, 0xef,
+//  0x12, 0x12, 0x25, 0x15, 0x00, 0x00);
 
 /*-------------------Private Define-----------------------*/
 // 自定义服务 UUID（128位）
@@ -92,10 +91,10 @@ static bool notify_enabled = false; // 客户端是否已启用 notify
 
 /* ---------- 加密的设置 ---------- */
 #if BLE_ENCRYPTION_REQUIRED
-#define MY_CUSTOM_FLAGS   (BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY | \
-                           BLE_GATT_CHR_F_READ_ENC | BLE_GATT_CHR_F_WRITE_ENC)
+#define MY_CUSTOM_FLAGS (BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY | \
+                         BLE_GATT_CHR_F_READ_ENC | BLE_GATT_CHR_F_WRITE_ENC)
 #else
-#define MY_CUSTOM_FLAGS   (BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY)
+#define MY_CUSTOM_FLAGS (BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY)
 #endif
 
 /* GATT services table */
@@ -164,7 +163,6 @@ void gatt_svr_register_cb(struct ble_gatt_register_ctxt *ctxt, void *arg)
     }
 }
 
-
 // 订阅回调中，更新连接状态和订阅状态（cur_notify 和 cur_indicate）
 void gatt_svr_subscribe_cb(struct ble_gap_event *event)
 {
@@ -220,13 +218,13 @@ int gatt_svc_init(void)
     return 0;
 }
 
-
 // 判断连接是否加密
 bool is_connection_encrypted(uint16_t conn_handle)
 {
     struct ble_gap_conn_desc desc;
     int rc = ble_gap_conn_find(conn_handle, &desc);
-    if (rc != 0) {
+    if (rc != 0)
+    {
         ESP_LOGE(TAG, "ble_gap_conn_find failed with %d", rc);
         return false;
     }
@@ -239,7 +237,8 @@ static int data_access(uint16_t conn_handle, uint16_t attr_handle,
 {
 #if BLE_ENCRYPTION_REQUIRED
     // 先检查连接是否加密
-    if (!is_connection_encrypted(conn_handle)) {
+    if (!is_connection_encrypted(conn_handle))
+    {
         ESP_LOGW(TAG, "Access denied: connection not encrypted (conn_handle=%d)", conn_handle);
         return 0; // 返回加密错误
     }
@@ -284,7 +283,6 @@ static int data_access(uint16_t conn_handle, uint16_t attr_handle,
     }
 }
 
-
 // 发送任务：从发送队列中读取数据，并通过BLE通知发送给客户端
 void ble_send_task(void *param)
 {
@@ -292,7 +290,7 @@ void ble_send_task(void *param)
     while (1)
     {
         // 判断是否已初始化连接句柄且通知已启用
-        ESP_LOGI(TAG, "Conn inited: %d, Notify enabled: %d", custom_chr_conn_handle, custom_notify_enabled);
+        // ESP_LOGI(TAG, "Conn inited: %d, Notify enabled: %d", custom_chr_conn_handle, custom_notify_enabled);
         if (custom_chr_conn_handle && custom_notify_enabled)
         {
             // 阻塞等待发送队列数据
@@ -306,7 +304,8 @@ void ble_send_task(void *param)
                     continue;
                 }
                 // 发送通知
-                int rc = ble_gatts_notify_custom(custom_chr_conn_handle, my_custom_chr_val_handle, om);;
+                int rc = ble_gatts_notify_custom(custom_chr_conn_handle, my_custom_chr_val_handle, om);
+                ;
                 if (rc != 0)
                 {
                     ESP_LOGE(TAG, "Notify send failed, rc=%d", rc);
@@ -325,12 +324,10 @@ void ble_send_task(void *param)
     }
 }
 
-
 // 接收任务：从接收队列读取数据，处理后生成响应并发送回客户端
 void ble_receive_task(void *param)
 {
     ble_data_t data;
-    char response[QUEUE_ITEM_SIZE];
 
     while (1)
     {
@@ -364,5 +361,3 @@ void ble_receive_task(void *param)
 
     vTaskDelete(NULL);
 }
-
-
