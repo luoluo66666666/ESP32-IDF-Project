@@ -27,7 +27,7 @@ void mode0_task(void *pvParameters)
     int status = 0;
     int time_cnt = 0;
     int runtime = 0; /* 统计执行时长（秒） */
-    int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
+    // int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
     int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
 
     ESP_LOGI(TAG, "Entering mode 0");
@@ -39,10 +39,10 @@ void mode0_task(void *pvParameters)
     }
 
     /* 读取 DI，必要时可作暂停/急停等判断 */
-    for (size_t i = 0; i < sizeof(di_pin) / sizeof(di_pin[0]); ++i)
-    {
-        di_level[i] = get_di_pin(i);
-    }
+    // for (size_t i = 0; i < sizeof(di_pin) / sizeof(di_pin[0]); ++i)
+    // {
+    //     di_level[i] = get_di_pin(i);
+    // }
 
     /*------------------ 主循环 ------------------*/
     while (true)
@@ -168,6 +168,7 @@ void mode0_task(void *pvParameters)
                 status = 6;
                 time_cnt = 0;
             }
+            break;
 
         case 6: /* 暂停 7（10 s）*/
             if (time_cnt == 0)

@@ -46,31 +46,14 @@ void ble_queue_init(void)
 }
 
 /* Private function declarations */
-static int heart_rate_chr_access(uint16_t conn_handle, uint16_t attr_handle,
-                                 struct ble_gatt_access_ctxt *ctxt, void *arg);
-static int led_chr_access(uint16_t conn_handle, uint16_t attr_handle,
-                          struct ble_gatt_access_ctxt *ctxt, void *arg);
+/* GATT 特征 (Characteristic) 的读写访问回调函数 */
+static int data_access(uint16_t conn_handle, uint16_t attr_handle,
+                       struct ble_gatt_access_ctxt *ctxt, void *arg);
 
 /* Private variables */
-/* Heart rate service */
-// static const ble_uuid16_t heart_rate_svc_uuid = BLE_UUID16_INIT(0x180D);
-
-static uint8_t heart_rate_chr_val[2] = {0};
-static uint16_t heart_rate_chr_val_handle;
-// static const ble_uuid16_t heart_rate_chr_uuid = BLE_UUID16_INIT(0x2A37);
-
-static uint16_t heart_rate_chr_conn_handle = 0;
-bool heart_rate_chr_conn_handle_inited = false;
-bool heart_rate_ind_status = false;
 uint16_t custom_chr_conn_handle = 0;
 bool custom_notify_enabled = false;
 
-/* Automation IO service */
-// static const ble_uuid16_t auto_io_svc_uuid = BLE_UUID16_INIT(0x1815);
-// static uint16_t led_chr_val_handle;
-// static const ble_uuid128_t led_chr_uuid =
-// BLE_UUID128_INIT(0x23, 0xd1, 0xbc, 0xea, 0x5f, 0x78, 0x23, 0x15, 0xde, 0xef,
-//  0x12, 0x12, 0x25, 0x15, 0x00, 0x00);
 
 /*-------------------Private Define-----------------------*/
 // 自定义服务 UUID（128位）
@@ -97,25 +80,36 @@ static bool notify_enabled = false; // 客户端是否已启用 notify
 #define MY_CUSTOM_FLAGS (BLE_GATT_CHR_F_READ | BLE_GATT_CHR_F_WRITE | BLE_GATT_CHR_F_NOTIFY)
 #endif
 
+/*******************************************************************************
+****@brief: Nimble GATT(通用属性规范)服务定义表
+****@author: Luo
+****@date: 2025-08-27 08:15:02
+********************************************************************************/
 /* GATT services table */
 static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
 
     {
-        .type = BLE_GATT_SVC_TYPE_PRIMARY,
-        .uuid = &my_custom_svc_uuid.u,
+        .type = BLE_GATT_SVC_TYPE_PRIMARY,     // 定义一个 "主服务" (Primary Service)
+        .uuid = &my_custom_svc_uuid.u,         // 服务的 UUID，这里是自定义的 UUID
         .characteristics =
-            (struct ble_gatt_chr_def[]){/* LED characteristic */
-                                        {.uuid = &my_custom_chr_uuid.u,
-                                         .access_cb = data_access,
-                                         .flags = MY_CUSTOM_FLAGS,
-                                         .val_handle = &my_custom_chr_val_handle},
-                                        {0}},
+            (struct ble_gatt_chr_def[]){       // 服务包含的特征值数组（以 {0} 结束）
+
+                {   // 定义一个特征值 (Characteristic)
+                    .uuid = &my_custom_chr_uuid.u,   // 特征值的 UUID，自定义
+                    .access_cb = data_access,        // 读/写/通知时的回调函数
+                    .flags = MY_CUSTOM_FLAGS,        // 特征值的属性标志（读、写、通知等）
+                    .val_handle = &my_custom_chr_val_handle // 保存特征值的句柄（后续 notify 用到）
+                },
+
+                {0} // 数组结束标记，必须有
+            },
     },
 
     {
-        0, /* No more services. */
-    } /* End of services table */
+        0, // 表示没有更多的服务，服务表以 {0} 结束
+    }
 };
+
 
 /* Private functions */
 /*
@@ -218,18 +212,6 @@ int gatt_svc_init(void)
     return 0;
 }
 
-// 判断连接是否加密
-bool is_connection_encrypted(uint16_t conn_handle)
-{
-    struct ble_gap_conn_desc desc;
-    int rc = ble_gap_conn_find(conn_handle, &desc);
-    if (rc != 0)
-    {
-        ESP_LOGE(TAG, "ble_gap_conn_find failed with %d", rc);
-        return false;
-    }
-    return desc.sec_state.encrypted;
-}
 
 // data_access 增强版：加密连接才允许访问
 static int data_access(uint16_t conn_handle, uint16_t attr_handle,
@@ -283,29 +265,35 @@ static int data_access(uint16_t conn_handle, uint16_t attr_handle,
     }
 }
 
-// 发送任务：从发送队列中读取数据，并通过BLE通知发送给客户端
+
+/*******************************************************************************
+****@brief: 发送任务：从发送队列中读取数据，并通过BLE通知发送给客户端
+****@param: *param: FreeRTOS 任务参数（未使用）
+****@author: Luo
+****@date: 2025-08-27 08:18:13
+********************************************************************************/
 void ble_send_task(void *param)
 {
     ble_data_t data;
     while (1)
     {
-        // 判断是否已初始化连接句柄且通知已启用
-        // ESP_LOGI(TAG, "Conn inited: %d, Notify enabled: %d", custom_chr_conn_handle, custom_notify_enabled);
+        // 只有在客户端订阅(characteristic notify)后，custom_notify_enabled 才为 true
         if (custom_chr_conn_handle && custom_notify_enabled)
         {
-            // 阻塞等待发送队列数据
+            // 从发送队列中阻塞等待数据（直到有数据进入队列才继续）
             if (xQueueReceive(ble_tx_queue, &data, portMAX_DELAY) == pdTRUE)
             {
-                // 创建mbuf结构存放发送数据
+                // 分配 os_mbuf 缓冲区，用于封装要发送的数据
                 struct os_mbuf *om = ble_hs_mbuf_from_flat(data.buf, data.len);
                 if (om == NULL)
                 {
                     ESP_LOGE(TAG, "Failed to allocate mbuf");
-                    continue;
+                    continue; // 分配失败则跳过本次循环
                 }
-                // 发送通知
-                int rc = ble_gatts_notify_custom(custom_chr_conn_handle, my_custom_chr_val_handle, om);
-                ;
+
+                // 通过自定义特征值发送通知给客户端
+                int rc = ble_gatts_notify_custom(custom_chr_conn_handle,
+                                                 my_custom_chr_val_handle, om);
                 if (rc != 0)
                 {
                     ESP_LOGE(TAG, "Notify send failed, rc=%d", rc);
@@ -318,35 +306,42 @@ void ble_send_task(void *param)
         }
         else
         {
-            // 未初始化时，任务延时等待
+            // 没有连接或客户端未订阅时，延时等待，避免空转占用CPU
             vTaskDelay(pdMS_TO_TICKS(100));
         }
     }
 }
 
-// 接收任务：从接收队列读取数据，处理后生成响应并发送回客户端
+
+/*******************************************************************************
+****@brief: 接收任务：从接收队列读取数据，处理后生成响应并发送回客户端
+****@param: *param: FreeRTOS 任务参数（未使用）
+****@author: Luo
+****@date: 2025-08-27 08:18:27
+********************************************************************************/
 void ble_receive_task(void *param)
 {
     ble_data_t data;
 
     while (1)
     {
-        // 从接收队列读取数据
+        // 从接收队列阻塞等待数据（直到有数据被放入队列）
         if (xQueueReceive(ble_rx_queue, &data, portMAX_DELAY) == pdTRUE)
         {
             ESP_LOGI(TAG, "Received data: %.*s", (int)data.len, data.buf);
 
-            // 调用协议处理函数，生成响应
+            // 调用协议解析函数，生成响应数据（写入 response 缓冲区）
             memset(response, 0, sizeof(response));
             ctrl_protocol((char *)data.buf, response, sizeof(response));
 
-            // 如果响应不为空，则放入发送队列
+            // 如果协议处理有输出（response 非空），则放入发送队列
             if (strlen(response) > 0 && ble_tx_queue != NULL)
             {
                 ble_data_t tx_data = {0};
                 strncpy((char *)tx_data.buf, response, QUEUE_ITEM_SIZE - 1);
                 tx_data.len = strnlen((char *)tx_data.buf, QUEUE_ITEM_SIZE);
 
+                // 将响应数据放入发送队列，准备由 ble_send_task 发送
                 if (xQueueSend(ble_tx_queue, &tx_data, 10 / portTICK_PERIOD_MS) != pdPASS)
                 {
                     ESP_LOGW(TAG, "Send queue full, response dropped");
@@ -358,6 +353,4 @@ void ble_receive_task(void *param)
             }
         }
     }
-
-    vTaskDelete(NULL);
 }

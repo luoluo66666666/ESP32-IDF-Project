@@ -13,7 +13,13 @@
         "adc.h": "c",
         "nimble_port_freertos.h": "c",
         "gpio_reg.h": "c",
-        "adc_continuous.h": "c"
+        "adc_continuous.h": "c",
+        "compare": "c",
+        "cstdlib": "c",
+        "type_traits": "c",
+        "cmath": "c",
+        "limits": "c",
+        "new": "c"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM14"

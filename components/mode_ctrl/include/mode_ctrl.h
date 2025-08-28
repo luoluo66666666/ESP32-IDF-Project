@@ -73,10 +73,12 @@ static inline void delay_1s(void)
     vTaskDelay(pdMS_TO_TICKS(1000)); // pdMS_TO_TICKS 宏将毫秒转换为 FreeRTOS 时钟节
 }
 
+/* 公用函数声明 */
 extern int do_pin[];
 
 esp_err_t pin_init(void);
 esp_err_t sensor_init(void);
+
 int set_do_pin(int index, int level);
 int get_do_pin(int index);
 int get_di_pin(int index);
@@ -88,7 +90,6 @@ int mode3(void);
 int mode4(void);
 int mode5_up(void);
 int mode5_down(void);
-
 
 
 #endif // __MODE_CTRL_H__

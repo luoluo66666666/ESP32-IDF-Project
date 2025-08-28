@@ -85,3 +85,6 @@ void app_main(void)
     xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 
 }
+
+
+
