@@ -7,6 +7,7 @@ idf_component_register(
         "mode3.c"
         "mode4.c"
         "mode5.c"
+        "mode_test.c"
     INCLUDE_DIRS
         "include"
     REQUIRES
