@@ -93,40 +93,6 @@ static void IRAM_ATTR flow_isr_handler(void *arg)
     }
 }
 
-// ================== 流量任务 ==================
-void sensor_task(void *pvParameters)
-{
-    uint32_t last_count = 0;
-    ble_data_t tx_data;
-
-    while (1)
-    {
-        vTaskDelay(pdMS_TO_TICKS(FLOW_TASK_PERIOD_MS));
-
-        uint32_t count = flow_pulse_count;
-        uint32_t delta = count - last_count;
-        last_count = count;
-
-        float flow_l_min = (delta * 60.0f) / PULSE_PER_L;
-
-        // 构造数据
-        int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf),
-                           "Pulse=%lu,Flow=%.2f", (unsigned long)delta, flow_l_min);
-        tx_data.len = len;
-
-        // 放入队列（给 BLE 任务）
-        if (xQueueSend(ble_tx_queue, &tx_data, 0) != pdPASS)
-        {
-            ESP_LOGW(TAG, "BLE TX queue full, data dropped");
-        }
-        else
-        {
-            ESP_LOGI(TAG, "Flow queued: %s", tx_data.buf);
-        }
-    }
-}
-
-
 // NTC 转温度公式
 float ntc_resistance_to_temp(float r_ntc)
 {
@@ -138,9 +104,59 @@ float ntc_resistance_to_temp(float r_ntc)
     return tempK - 273.15f; // 转摄氏度
 }
 
+
+#define SEND_INTERVAL_MS 5000  // 5 秒
+// ================== 流量任务 ==================
+void sensor_task(void *pvParameters)
+{
+    uint32_t last_count = 0;
+    ble_data_t tx_data;
+    TickType_t last_send_tick = 0;
+    const TickType_t send_interval = pdMS_TO_TICKS(5000); // 5 秒发送一次
+    bool queue_full_flag = false; // 队列满标志
+
+    while (1)
+    {
+        vTaskDelay(pdMS_TO_TICKS(100));
+
+        if ((xTaskGetTickCount() - last_send_tick) < send_interval)
+            continue;
+
+        uint32_t count = flow_pulse_count;
+        uint32_t delta = count - last_count;
+        last_count = count;
+
+        float flow_l_min = (delta * 60.0f) / PULSE_PER_L;
+
+        int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf),
+                           "Pulse=%lu,Flow=%.2f", (unsigned long)delta, flow_l_min);
+        tx_data.len = len;
+
+        if (uxQueueSpacesAvailable(ble_tx_queue) > 0)
+        {
+            xQueueSend(ble_tx_queue, &tx_data, 0);
+            last_send_tick = xTaskGetTickCount();
+            queue_full_flag = false; // 队列有空，重置标志
+            ESP_LOGI(TAG, "Flow queued: %s", tx_data.buf);
+        }
+        else
+        {
+            if (!queue_full_flag)
+            {
+                ESP_LOGW(TAG, "BLE TX queue full, flow data dropped");
+                queue_full_flag = true; // 只打印一次
+            }
+        }
+    }
+}
+
+// ================== NTC 任务 ==================
 void ntc_task(void *pv)
 {
     float v_filtered = 0.0f;
+    TickType_t last_send_tick = 0;
+    const TickType_t send_interval = pdMS_TO_TICKS(5000); // 5 秒发送一次
+    bool queue_full_flag = false;
 
     while (1)
     {
@@ -154,43 +170,50 @@ void ntc_task(void *pv)
 
             int voltage = 0;
             if (adc_cali_handle)
-            {
                 adc_cali_raw_to_voltage(adc_cali_handle, adc_raw, &voltage);
-            }
             else
-            {
                 voltage = (adc_raw * VREF) / 4095;
-            }
 
             float v = voltage / 1000.0f;
-
-            // 指数滤波
             if (v_filtered == 0.0f) v_filtered = v;
             v_filtered = ALPHA * v + (1 - ALPHA) * v_filtered;
 
-            // 电压校准
             float v_corrected = v_filtered * V_CORRECTION_FACTOR;
-
             float r_ntc = (R_FIXED * v_corrected) / (3.3f - v_corrected);
             float tempC = ntc_resistance_to_temp(r_ntc);
 
-            ESP_LOGI(TAG, "NTC: raw=%" PRIu32 ", V=%.3fV, Vcorr=%.3fV, R=%.1fΩ, T=%.2f°C",
-                     adc_raw, v_filtered, v_corrected, r_ntc, tempC);
-
-            // BLE发送
-            ble_data_t tx_data;
-            int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf), "TEMP=%.2f", tempC);
-            tx_data.len = len;
-
-            if (xQueueSend(ble_tx_queue, &tx_data, 0) != pdPASS)
+            if ((xTaskGetTickCount() - last_send_tick) >= send_interval)
             {
-                ESP_LOGW(TAG, "BLE TX queue full, temp dropped");
+                if (uxQueueSpacesAvailable(ble_tx_queue) > 0)
+                {
+                    ble_data_t tx_data;
+                    int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf), "TEMP=%.2f", tempC);
+                    tx_data.len = len;
+
+                    xQueueSend(ble_tx_queue, &tx_data, 0);
+                    last_send_tick = xTaskGetTickCount();
+                    queue_full_flag = false; // 队列有空，重置标志
+
+                    ESP_LOGI(TAG, "NTC queued: raw=%" PRIu32 ", Vcorr=%.3fV, T=%.2f°C",
+                             adc_raw, v_corrected, tempC);
+                }
+                else
+                {
+                    if (!queue_full_flag)
+                    {
+                        ESP_LOGW(TAG, "BLE TX queue full, temp dropped");
+                        queue_full_flag = true; // 只打印一次
+                    }
+                }
             }
         }
 
-        vTaskDelay(pdMS_TO_TICKS(1000));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
+
+
+
 /*******************************************************************************
 ****@brief 初始化所有 DO（输出）和 DI（输入）引脚 
 * 1. 先遍历 DO 引脚数组，依次复位引脚并设置为输出模式

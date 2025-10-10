@@ -285,12 +285,15 @@ void test_task(void *pvParameters)
             break;
 
         case 13: /*14 结束 / 复位 */
-            ESP_LOGI(TAG, "mode 1 finished");
+            ESP_LOGI(TAG, "mode 0 finished");
             for (size_t i = 0; i < 26; ++i)
             {
                 TURN_OFF(i);
             }
             ESP_LOGI(TAG, "Mode0 finished, deleting task");
+            // 设置电机任务的 FINISH_BIT，电机任务收到后自动收杆
+            xEventGroupSetBits(event_motor_ctrl, Motor_Finsh_BIT);
+
             vTaskDelete(NULL); // 删除自己
             break;
 

@@ -20,53 +20,92 @@ const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
 ****@author: Luo
 ****@date: 2025-08-19 15:21:44
 ********************************************************************************/
-#define POLE_EVENT_BIT (1 << 0)
+#define STEP_DELAY_MS 50
+#define PHASE_TIME_MS 5000
+
+typedef enum { POLE_RETRACTED=0, POLE_EXTENDED=1 } pole_state_t;
+
 EventGroupHandle_t event_motor_ctrl;
+
+
 void Pole_motor_control_task(void *p)
 {
+    pole_state_t pole1_state = POLE_RETRACTED;
+    pole_state_t pole2_state = POLE_RETRACTED;
+
+    const TickType_t step_delay = pdMS_TO_TICKS(STEP_DELAY_MS);
+    const TickType_t phase_time = pdMS_TO_TICKS(PHASE_TIME_MS);
+    TURN_OFF(0); TURN_OFF(1); TURN_OFF(20); TURN_OFF(21);
+
     while (1)
     {
-        // 等待 RUN_BIT
-        EventBits_t motor_bits = xEventGroupWaitBits(
-            event_motor_ctrl,
-            Motor_RUN_BIT,
-            pdFALSE,  // 不清除 RUN_BIT
-            pdFALSE,
-            portMAX_DELAY);
+        // 等待 RUN_BIT 或 FINISH_BIT
+        xEventGroupWaitBits(event_motor_ctrl, Motor_RUN_BIT | Motor_Finsh_BIT,
+                            pdFALSE, pdFALSE, portMAX_DELAY);
 
-        if (motor_bits & Motor_RUN_BIT)
+        // === FINISH 优先级最高 ===
+        if (xEventGroupGetBits(event_motor_ctrl) & Motor_Finsh_BIT)
         {
-            ESP_LOGI(TAG, "Motor RUN detected, entering loop");
-            
-            while (1)
+        finsh_motor:
+            // 收杆
+            TURN_OFF(1); TURN_ON(0); pole1_state = POLE_RETRACTED;
+            TURN_OFF(21); TURN_ON(20); pole2_state = POLE_RETRACTED;
+            vTaskDelay(pdMS_TO_TICKS(5000)); // 给收杆动作预留时间
+            TURN_OFF(0); TURN_OFF(20);
+
+            xEventGroupClearBits(event_motor_ctrl, Motor_Finsh_BIT | Motor_RUN_BIT | Motor_STOP_BIT);
+            ESP_LOGI(TAG, "Motor FINISH detected, all retracted");
+            continue; // 等待下一次 RUN/FINISH
+        }
+
+        // === RUN 状态机 ===
+        while (xEventGroupGetBits(event_motor_ctrl) & Motor_RUN_BIT)
+        {
+            if (pole1_state == POLE_RETRACTED && pole2_state == POLE_RETRACTED)
             {
-                // 伸出
-                TURN_OFF(0); TURN_OFF(20);
-                TURN_ON(1); TURN_ON(21);
-                vTaskDelay(pdMS_TO_TICKS(5000));
+                TURN_OFF(0); TURN_ON(1); pole1_state = POLE_EXTENDED;
+                TURN_OFF(21); TURN_ON(20); pole2_state = POLE_RETRACTED;
+            }
+            else if (pole1_state == POLE_EXTENDED && pole2_state == POLE_RETRACTED)
+            {
+                TURN_OFF(1); TURN_ON(0); pole1_state = POLE_RETRACTED;
+                TURN_OFF(20); TURN_ON(21); pole2_state = POLE_EXTENDED;
+            }
+            else if (pole1_state == POLE_RETRACTED && pole2_state == POLE_EXTENDED)
+            {
+                TURN_OFF(0); TURN_ON(1); pole1_state = POLE_EXTENDED;
+                TURN_OFF(21); TURN_ON(20); pole2_state = POLE_RETRACTED;
+            }
+            else
+            {
+                TURN_OFF(0); TURN_OFF(1); TURN_OFF(20); TURN_OFF(21);
+            }
 
-                TURN_OFF(1); TURN_OFF(21);
-                vTaskDelay(pdMS_TO_TICKS(50));
+            // 阶段延时，随时响应 STOP/FINISH
+            TickType_t start_tick = xTaskGetTickCount();
+            while (xTaskGetTickCount() - start_tick < phase_time)
+            {
+                EventBits_t bits = xEventGroupGetBits(event_motor_ctrl);
+                if (bits & Motor_STOP_BIT)
+                    goto stop_motor;
+                if (bits & Motor_Finsh_BIT)
+                    goto finsh_motor;
 
-                // 缩回
-                TURN_ON(0); TURN_ON(20);
-                vTaskDelay(pdMS_TO_TICKS(5000));
-
-                TURN_OFF(0); TURN_OFF(20);
-                vTaskDelay(pdMS_TO_TICKS(50));
-
-                // 检查 STOP_BIT
-                EventBits_t stop_bits = xEventGroupGetBits(event_motor_ctrl);
-                if (stop_bits & Motor_STOP_BIT)
-                {
-                    xEventGroupClearBits(event_motor_ctrl, Motor_STOP_BIT | Motor_RUN_BIT);
-                    ESP_LOGI(TAG, "Motor STOP detected, exit loop");
-                    break;
-                }
+                vTaskDelay(step_delay);
             }
         }
+
+    stop_motor:
+        // 紧急停止，只断电，不改变 state
+        TURN_OFF(0); TURN_OFF(1); TURN_OFF(20); TURN_OFF(21);
+        xEventGroupClearBits(event_motor_ctrl, Motor_STOP_BIT | Motor_RUN_BIT);
+        ESP_LOGI(TAG, "Motor STOP detected, hold state P1=%d, P2=%d",
+                 pole1_state, pole2_state);
+        continue; // 回到等待 RUN 或 FINISH
     }
 }
+
+
 
 /*******************************************************************************
 ****函数功能: 初始化控制协议
@@ -91,9 +130,8 @@ void ctrl_protocol_init(void)
     xEventGroupClearBits(event_motor_ctrl, Motor_RUN_BIT | Motor_STOP_BIT | Motor_GET_BIT);
 }
 
-
 /*******************************************************************************
-****@brief:撑杆的运行和停止 
+****@brief:撑杆的运行和停止
 ****@author: Luo
 ****@date: 2025-08-21 16:37:49
 ********************************************************************************/
@@ -108,7 +146,6 @@ int motor_stop(void)
     xEventGroupSetBits(event_motor_ctrl, Motor_STOP_BIT);
     return 0;
 }
-
 
 /*******************************************************************************
 ****函数功能: 获取故障状态
@@ -149,7 +186,7 @@ int get_mode_status(void)
         return -1;
 
     EventBits_t event_bits = xEventGroupGetBits(event_ctrl_protocol);
-    if (event_bits & Mode0_BIT)     
+    if (event_bits & Mode0_BIT)
         return 0;
     if (event_bits & Mode1_BIT)
         return 1;

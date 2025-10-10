@@ -90,6 +90,8 @@ int mode3(void);
 int mode4(void);
 int mode5_up(void);
 int mode5_down(void);
+void test_task(void *pvParameters);
+void start_mode_test(void);
 
 
 #endif // __MODE_CTRL_H__

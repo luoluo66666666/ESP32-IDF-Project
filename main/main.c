@@ -10,7 +10,6 @@
 #include <esp_log.h>
 // #include "esp_adc/adc_continuous.h"
 
-
 static const char *TAG = "current MODE";
 
 extern void Pole_motor_control_task(void *p);
@@ -31,7 +30,8 @@ void mode_control_task(void *pvParameters)
         {
         case Mode0_BIT:
             ESP_LOGI(TAG, "Mode 0 activated");
-            start_mode0();                                            // 调用模式0的控制函数
+            // start_mode0();
+            start_mode_test();                                    // 调用模式0的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode0_BIT); // 手动清除事件位
             break;
         case Mode1_BIT:
@@ -56,12 +56,12 @@ void mode_control_task(void *pvParameters)
             break;
         case Mode5_UPPER_BIT:
             ESP_LOGI(TAG, "Mode 5 Upper activated");
-            mode5_up(); // 调用模式5上半部分的控制函数
+            mode5_up();                                                 // 调用模式5上半部分的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode5_UPPER_BIT); // 手动清除事件位
             break;
         case Mode5_LOWER_BIT:
             ESP_LOGI(TAG, "Mode 5 Lower activated");
-            mode5_down();                                         // 调用模式5下半部分的控制函数
+            mode5_down();                                               // 调用模式5下半部分的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode5_LOWER_BIT); // 手动清除事件位
             break;
         default:
@@ -83,8 +83,4 @@ void app_main(void)
     // 创建控制任务
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
-
 }
-
-
-

@@ -21,6 +21,7 @@
 #define Motor_RUN_BIT BIT7
 #define Motor_STOP_BIT BIT8
 #define Motor_GET_BIT BIT9
+#define Motor_Finsh_BIT BIT12
 
 #define RUN_BIT BIT10   // 运行状态标志位
 #define FAULT_BIT BIT11 // 故障状态标志位
