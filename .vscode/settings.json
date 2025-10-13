@@ -19,7 +19,11 @@
         "type_traits": "c",
         "cmath": "c",
         "limits": "c",
-        "new": "c"
+        "new": "c",
+        "i2c_master.h": "c",
+        "i2c_device.h": "c",
+        "future": "c",
+        "format": "c"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM14"

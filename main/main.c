@@ -8,6 +8,8 @@
 #include "ctrl_protocol.h"
 #include "mode_ctrl.h"
 #include <esp_log.h>
+
+#include "device_reg.h"
 // #include "esp_adc/adc_continuous.h"
 
 static const char *TAG = "current MODE";
@@ -77,10 +79,11 @@ void app_main(void)
     Wifi_task();          // 启动wifi模块
 
     ble_task(); // 启动BLE任务
+    i2c_main();
 
-    sensor_init();
+    // sensor_init();
 
-    // 创建控制任务
-    xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
-    xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
+    // // 创建控制任务
+    // xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
+    // xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }
