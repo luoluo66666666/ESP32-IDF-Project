@@ -23,7 +23,13 @@
         "i2c_master.h": "c",
         "i2c_device.h": "c",
         "future": "c",
-        "format": "c"
+        "format": "c",
+        "cstdint": "c",
+        "array": "c",
+        "string": "c",
+        "string_view": "c",
+        "span": "c",
+        "esp_err.h": "c"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM14"

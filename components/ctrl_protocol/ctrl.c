@@ -9,7 +9,9 @@
 #include "esp_log.h"
 
 #include "mode_ctrl.h"                         // 引入模式控制相关函数的头文件
+#include "device_reg.h"
 extern EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
+extern thermostat_t thermo;    // 静态实例
 // EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
 
@@ -23,10 +25,13 @@ const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
 #define STEP_DELAY_MS 50
 #define PHASE_TIME_MS 5000
 
-typedef enum { POLE_RETRACTED=0, POLE_EXTENDED=1 } pole_state_t;
+typedef enum
+{
+    POLE_RETRACTED = 0,
+    POLE_EXTENDED = 1
+} pole_state_t;
 
 EventGroupHandle_t event_motor_ctrl;
-
 
 void Pole_motor_control_task(void *p)
 {
@@ -35,7 +40,10 @@ void Pole_motor_control_task(void *p)
 
     const TickType_t step_delay = pdMS_TO_TICKS(STEP_DELAY_MS);
     const TickType_t phase_time = pdMS_TO_TICKS(PHASE_TIME_MS);
-    TURN_OFF(0); TURN_OFF(1); TURN_OFF(20); TURN_OFF(21);
+    TURN_OFF(0);
+    TURN_OFF(1);
+    TURN_OFF(20);
+    TURN_OFF(21);
 
     while (1)
     {
@@ -48,10 +56,15 @@ void Pole_motor_control_task(void *p)
         {
         finsh_motor:
             // 收杆
-            TURN_OFF(1); TURN_ON(0); pole1_state = POLE_RETRACTED;
-            TURN_OFF(21); TURN_ON(20); pole2_state = POLE_RETRACTED;
+            TURN_OFF(1);
+            TURN_ON(0);
+            pole1_state = POLE_RETRACTED;
+            TURN_OFF(21);
+            TURN_ON(20);
+            pole2_state = POLE_RETRACTED;
             vTaskDelay(pdMS_TO_TICKS(5000)); // 给收杆动作预留时间
-            TURN_OFF(0); TURN_OFF(20);
+            TURN_OFF(0);
+            TURN_OFF(20);
 
             xEventGroupClearBits(event_motor_ctrl, Motor_Finsh_BIT | Motor_RUN_BIT | Motor_STOP_BIT);
             ESP_LOGI(TAG, "Motor FINISH detected, all retracted");
@@ -63,22 +76,37 @@ void Pole_motor_control_task(void *p)
         {
             if (pole1_state == POLE_RETRACTED && pole2_state == POLE_RETRACTED)
             {
-                TURN_OFF(0); TURN_ON(1); pole1_state = POLE_EXTENDED;
-                TURN_OFF(21); TURN_ON(20); pole2_state = POLE_RETRACTED;
+                TURN_OFF(0);
+                TURN_ON(1);
+                pole1_state = POLE_EXTENDED;
+                TURN_OFF(21);
+                TURN_ON(20);
+                pole2_state = POLE_RETRACTED;
             }
             else if (pole1_state == POLE_EXTENDED && pole2_state == POLE_RETRACTED)
             {
-                TURN_OFF(1); TURN_ON(0); pole1_state = POLE_RETRACTED;
-                TURN_OFF(20); TURN_ON(21); pole2_state = POLE_EXTENDED;
+                TURN_OFF(1);
+                TURN_ON(0);
+                pole1_state = POLE_RETRACTED;
+                TURN_OFF(20);
+                TURN_ON(21);
+                pole2_state = POLE_EXTENDED;
             }
             else if (pole1_state == POLE_RETRACTED && pole2_state == POLE_EXTENDED)
             {
-                TURN_OFF(0); TURN_ON(1); pole1_state = POLE_EXTENDED;
-                TURN_OFF(21); TURN_ON(20); pole2_state = POLE_RETRACTED;
+                TURN_OFF(0);
+                TURN_ON(1);
+                pole1_state = POLE_EXTENDED;
+                TURN_OFF(21);
+                TURN_ON(20);
+                pole2_state = POLE_RETRACTED;
             }
             else
             {
-                TURN_OFF(0); TURN_OFF(1); TURN_OFF(20); TURN_OFF(21);
+                TURN_OFF(0);
+                TURN_OFF(1);
+                TURN_OFF(20);
+                TURN_OFF(21);
             }
 
             // 阶段延时，随时响应 STOP/FINISH
@@ -97,15 +125,16 @@ void Pole_motor_control_task(void *p)
 
     stop_motor:
         // 紧急停止，只断电，不改变 state
-        TURN_OFF(0); TURN_OFF(1); TURN_OFF(20); TURN_OFF(21);
+        TURN_OFF(0);
+        TURN_OFF(1);
+        TURN_OFF(20);
+        TURN_OFF(21);
         xEventGroupClearBits(event_motor_ctrl, Motor_STOP_BIT | Motor_RUN_BIT);
         ESP_LOGI(TAG, "Motor STOP detected, hold state P1=%d, P2=%d",
                  pole1_state, pole2_state);
         continue; // 回到等待 RUN 或 FINISH
     }
 }
-
-
 
 /*******************************************************************************
 ****函数功能: 初始化控制协议
@@ -416,6 +445,14 @@ void ctrl_protocol(char *input, char *output, int maxlen)
             }
             return;
         }
+    }
+
+    if (strncmp(input, "THERMO ", 7) == 0)
+    {
+        char response[128] = {0};
+        thermostat_handle_cmd(&thermo, input + 7, response, sizeof(response));
+        snprintf(output, maxlen, "%s\r\n", response);
+        return;
     }
 
     /* 5. 未知命令 */

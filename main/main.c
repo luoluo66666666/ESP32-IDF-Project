@@ -79,7 +79,8 @@ void app_main(void)
     Wifi_task();          // 启动wifi模块
 
     ble_task(); // 启动BLE任务
-    i2c_main();
+
+    app_init_task();
 
     // sensor_init();
 
