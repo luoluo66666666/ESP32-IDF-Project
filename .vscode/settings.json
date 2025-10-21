@@ -29,7 +29,12 @@
         "string": "c",
         "string_view": "c",
         "span": "c",
-        "esp_err.h": "c"
+        "esp_err.h": "c",
+        "pro_dis.h": "c",
+        "portmacro.h": "c",
+        "typedef.h": "c",
+        "portable.h": "c",
+        "random": "c"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM14"

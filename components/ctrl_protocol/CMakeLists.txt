@@ -5,5 +5,4 @@ idf_component_register(
         "include"
     REQUIRES 
         "mode_ctrl" 
-        "i2c"
 )

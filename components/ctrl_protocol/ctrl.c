@@ -9,9 +9,7 @@
 #include "esp_log.h"
 
 #include "mode_ctrl.h"                         // 引入模式控制相关函数的头文件
-#include "device_reg.h"
 extern EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
-extern thermostat_t thermo;    // 静态实例
 // EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
 
@@ -445,14 +443,6 @@ void ctrl_protocol(char *input, char *output, int maxlen)
             }
             return;
         }
-    }
-
-    if (strncmp(input, "THERMO ", 7) == 0)
-    {
-        char response[128] = {0};
-        thermostat_handle_cmd(&thermo, input + 7, response, sizeof(response));
-        snprintf(output, maxlen, "%s\r\n", response);
-        return;
     }
 
     /* 5. 未知命令 */
