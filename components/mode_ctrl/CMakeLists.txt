@@ -14,5 +14,5 @@ idf_component_register(
         driver
         ctrl_protocol
         esp_adc
-        NimBLE_GATT_Server
+        My_Bt
 )

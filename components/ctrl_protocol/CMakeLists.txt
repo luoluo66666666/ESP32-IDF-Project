@@ -5,4 +5,5 @@ idf_component_register(
         "include"
     REQUIRES 
         "mode_ctrl" 
+        "RS485"
 )

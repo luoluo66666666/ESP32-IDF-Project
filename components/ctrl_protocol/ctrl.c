@@ -9,6 +9,7 @@
 #include "esp_log.h"
 
 #include "mode_ctrl.h"                         // 引入模式控制相关函数的头文件
+#include "rs485_water_valve.h"
 extern EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 // EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
@@ -445,7 +446,36 @@ void ctrl_protocol(char *input, char *output, int maxlen)
         }
     }
 
-    /* 5. 未知命令 */
+    /* 5. 阀门控制命令： valve set/get*/
+    if (strncasecmp(input, "valve", 5) == 0)
+    {
+        char action[16] = {0};
+        int value = 0;
+        RS485_init();
+
+        // 支持格式：
+        //   valve set 45
+        //   valve get
+        if (sscanf(input, "valve %15s %d", action, &value) >= 1)
+        {
+            if (strcasecmp(action, "set") == 0)
+            {
+                // 写入阀门开度寄存器（40006 -> 0x0005）
+                rs485_write_register(0x01,0x0005, value);
+                snprintf(output, maxlen, "VALVE,SET,%d\r\n", value);
+                return;
+            }
+            else if (strcasecmp(action, "get") == 0)
+            {
+                // 读取寄存器区间 40001~40013 (0x0000~0x000C)
+                rs485_read_register(0x01,0x0000, 12);
+                snprintf(output, maxlen, "VALVE,READ_OK\r\n");
+                return;
+            }
+        }
+    }
+
+    /*  未知命令 */
     ESP_LOGE(TAG, "Invalid command");
     snprintf(output, maxlen, "CMD:ERR\r\n");
     return;

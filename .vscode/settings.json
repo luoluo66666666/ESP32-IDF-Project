@@ -34,7 +34,10 @@
         "portmacro.h": "c",
         "typedef.h": "c",
         "portable.h": "c",
-        "random": "c"
+        "random": "c",
+        "sdkconfig.h": "c",
+        "queue.h": "c",
+        "bitset": "c"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM14"

@@ -313,6 +313,19 @@ void test_task(void *pvParameters)
     }
 }
 
+void Water_level_task(void *pvParameters)
+{
+    int water_flag = 0;
+    while (1)
+    {
+        water_flag = get_di_pin(4);
+        if (water_flag == 1)
+        {
+            
+        }
+    }
+}
+
 void start_mode_test(void)
 {
     xTaskCreate(test_task, "test_task", 4096, NULL, 5, NULL);
