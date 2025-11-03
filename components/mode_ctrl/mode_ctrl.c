@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include "gatt_svc.h"
-#include "../../../../../../ESP-IDF/v5.4.1/esp-idf/components/esp_adc/include/esp_adc/adc_cali.h"
+// #include "../../../../../../ESP-IDF/v5.4.1/esp-idf/components/esp_adc/include/esp_adc/adc_cali.h"
 #include <math.h>
 
 
@@ -74,7 +74,7 @@ static uint64_t last_pulse_time_us = 0;
 
 // ADC 全局
 static adc_continuous_handle_t adc_handle = NULL;
-static adc_cali_handle_t adc_cali_handle = NULL;
+// static adc_cali_handle_t adc_cali_handle = NULL;
 
 
 extern QueueHandle_t ble_tx_queue;   // 由 BLE 模块提供
@@ -106,111 +106,111 @@ float ntc_resistance_to_temp(float r_ntc)
 
 
 #define SEND_INTERVAL_MS 5000  // 5 秒
-// ================== 流量任务 ==================
-void sensor_task(void *pvParameters)
-{
-    uint32_t last_count = 0;
-    ble_data_t tx_data;
-    TickType_t last_send_tick = 0;
-    const TickType_t send_interval = pdMS_TO_TICKS(5000); // 5 秒发送一次
-    bool queue_full_flag = false; // 队列满标志
+// // ================== 流量任务 ==================
+// void sensor_task(void *pvParameters)
+// {
+//     uint32_t last_count = 0;
+//     ble_data_t tx_data;
+//     TickType_t last_send_tick = 0;
+//     const TickType_t send_interval = pdMS_TO_TICKS(5000); // 5 秒发送一次
+//     bool queue_full_flag = false; // 队列满标志
 
-    while (1)
-    {
-        vTaskDelay(pdMS_TO_TICKS(100));
+//     while (1)
+//     {
+//         vTaskDelay(pdMS_TO_TICKS(100));
 
-        if ((xTaskGetTickCount() - last_send_tick) < send_interval)
-            continue;
+//         if ((xTaskGetTickCount() - last_send_tick) < send_interval)
+//             continue;
 
-        uint32_t count = flow_pulse_count;
-        uint32_t delta = count - last_count;
-        last_count = count;
+//         uint32_t count = flow_pulse_count;
+//         uint32_t delta = count - last_count;
+//         last_count = count;
 
-        float flow_l_min = (delta * 60.0f) / PULSE_PER_L;
+//         float flow_l_min = (delta * 60.0f) / PULSE_PER_L;
 
-        int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf),
-                           "Pulse=%lu,Flow=%.2f", (unsigned long)delta, flow_l_min);
-        tx_data.len = len;
+//         int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf),
+//                            "Pulse=%lu,Flow=%.2f", (unsigned long)delta, flow_l_min);
+//         tx_data.len = len;
 
-        if (uxQueueSpacesAvailable(ble_tx_queue) > 0)
-        {
-            xQueueSend(ble_tx_queue, &tx_data, 0);
-            last_send_tick = xTaskGetTickCount();
-            queue_full_flag = false; // 队列有空，重置标志
-            ESP_LOGI(TAG, "Flow queued: %s", tx_data.buf);
-        }
-        else
-        {
-            if (!queue_full_flag)
-            {
-                ESP_LOGW(TAG, "BLE TX queue full, flow data dropped");
-                queue_full_flag = true; // 只打印一次
-            }
-        }
-    }
-}
+//         if (uxQueueSpacesAvailable(ble_tx_queue) > 0)
+//         {
+//             xQueueSend(ble_tx_queue, &tx_data, 0);
+//             last_send_tick = xTaskGetTickCount();
+//             queue_full_flag = false; // 队列有空，重置标志
+//             ESP_LOGI(TAG, "Flow queued: %s", tx_data.buf);
+//         }
+//         else
+//         {
+//             if (!queue_full_flag)
+//             {
+//                 ESP_LOGW(TAG, "BLE TX queue full, flow data dropped");
+//                 queue_full_flag = true; // 只打印一次
+//             }
+//         }
+//     }
+// }
 
-// ================== NTC 任务 ==================
-void ntc_task(void *pv)
-{
-    float v_filtered = 0.0f;
-    TickType_t last_send_tick = 0;
-    const TickType_t send_interval = pdMS_TO_TICKS(5000); // 5 秒发送一次
-    bool queue_full_flag = false;
+// // ================== NTC 任务 ==================
+// void ntc_task(void *pv)
+// {
+//     float v_filtered = 0.0f;
+//     TickType_t last_send_tick = 0;
+//     const TickType_t send_interval = pdMS_TO_TICKS(5000); // 5 秒发送一次
+//     bool queue_full_flag = false;
 
-    while (1)
-    {
-        uint8_t result[READ_LEN];
-        uint32_t ret_num = 0;
+//     while (1)
+//     {
+//         uint8_t result[READ_LEN];
+//         uint32_t ret_num = 0;
 
-        if (adc_continuous_read(adc_handle, result, READ_LEN, &ret_num, 1000) == ESP_OK)
-        {
-            adc_digi_output_data_t *p = (adc_digi_output_data_t *)result;
-            uint32_t adc_raw = p->type2.data;
+//         if (adc_continuous_read(adc_handle, result, READ_LEN, &ret_num, 1000) == ESP_OK)
+//         {
+//             adc_digi_output_data_t *p = (adc_digi_output_data_t *)result;
+//             uint32_t adc_raw = p->type2.data;
 
-            int voltage = 0;
-            if (adc_cali_handle)
-                adc_cali_raw_to_voltage(adc_cali_handle, adc_raw, &voltage);
-            else
-                voltage = (adc_raw * VREF) / 4095;
+//             int voltage = 0;
+//             if (adc_cali_handle)
+//                 adc_cali_raw_to_voltage(adc_cali_handle, adc_raw, &voltage);
+//             else
+//                 voltage = (adc_raw * VREF) / 4095;
 
-            float v = voltage / 1000.0f;
-            if (v_filtered == 0.0f) v_filtered = v;
-            v_filtered = ALPHA * v + (1 - ALPHA) * v_filtered;
+//             float v = voltage / 1000.0f;
+//             if (v_filtered == 0.0f) v_filtered = v;
+//             v_filtered = ALPHA * v + (1 - ALPHA) * v_filtered;
 
-            float v_corrected = v_filtered * V_CORRECTION_FACTOR;
-            float r_ntc = (R_FIXED * v_corrected) / (3.3f - v_corrected);
-            float tempC = ntc_resistance_to_temp(r_ntc);
+//             float v_corrected = v_filtered * V_CORRECTION_FACTOR;
+//             float r_ntc = (R_FIXED * v_corrected) / (3.3f - v_corrected);
+//             float tempC = ntc_resistance_to_temp(r_ntc);
 
-            if ((xTaskGetTickCount() - last_send_tick) >= send_interval)
-            {
-                if (uxQueueSpacesAvailable(ble_tx_queue) > 0)
-                {
-                    ble_data_t tx_data;
-                    int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf), "TEMP=%.2f", tempC);
-                    tx_data.len = len;
+//             if ((xTaskGetTickCount() - last_send_tick) >= send_interval)
+//             {
+//                 if (uxQueueSpacesAvailable(ble_tx_queue) > 0)
+//                 {
+//                     ble_data_t tx_data;
+//                     int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf), "TEMP=%.2f", tempC);
+//                     tx_data.len = len;
 
-                    xQueueSend(ble_tx_queue, &tx_data, 0);
-                    last_send_tick = xTaskGetTickCount();
-                    queue_full_flag = false; // 队列有空，重置标志
+//                     xQueueSend(ble_tx_queue, &tx_data, 0);
+//                     last_send_tick = xTaskGetTickCount();
+//                     queue_full_flag = false; // 队列有空，重置标志
 
-                    ESP_LOGI(TAG, "NTC queued: raw=%" PRIu32 ", Vcorr=%.3fV, T=%.2f°C",
-                             adc_raw, v_corrected, tempC);
-                }
-                else
-                {
-                    if (!queue_full_flag)
-                    {
-                        ESP_LOGW(TAG, "BLE TX queue full, temp dropped");
-                        queue_full_flag = true; // 只打印一次
-                    }
-                }
-            }
-        }
+//                     ESP_LOGI(TAG, "NTC queued: raw=%" PRIu32 ", Vcorr=%.3fV, T=%.2f°C",
+//                              adc_raw, v_corrected, tempC);
+//                 }
+//                 else
+//                 {
+//                     if (!queue_full_flag)
+//                     {
+//                         ESP_LOGW(TAG, "BLE TX queue full, temp dropped");
+//                         queue_full_flag = true; // 只打印一次
+//                     }
+//                 }
+//             }
+//         }
 
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
-}
+//         vTaskDelay(pdMS_TO_TICKS(100));
+//     }
+// }
 
 
 
@@ -249,58 +249,58 @@ esp_err_t pin_init(void)
 }
 
 // ================== 传感器初始化 ==================
-esp_err_t sensor_init(void)
-{
-    esp_err_t ret = ESP_OK;
+// esp_err_t sensor_init(void)
+// {
+//     esp_err_t ret = ESP_OK;
 
-    // === ADC 初始化 (NTC) ===
-    adc_continuous_handle_cfg_t adc_cfg = {
-        .max_store_buf_size = 1024,
-        .conv_frame_size = READ_LEN,
-    };
-    ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_cfg, &adc_handle));
+//     // === ADC 初始化 (NTC) ===
+//     adc_continuous_handle_cfg_t adc_cfg = {
+//         .max_store_buf_size = 1024,
+//         .conv_frame_size = READ_LEN,
+//     };
+//     ESP_ERROR_CHECK(adc_continuous_new_handle(&adc_cfg, &adc_handle));
 
-    adc_continuous_config_t dig_cfg = {
-        .sample_freq_hz = 1000,
-        .conv_mode = ADC_CONV_SINGLE_UNIT_1,
-        .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
-    };
+//     adc_continuous_config_t dig_cfg = {
+//         .sample_freq_hz = 1000,
+//         .conv_mode = ADC_CONV_SINGLE_UNIT_1,
+//         .format = ADC_DIGI_OUTPUT_FORMAT_TYPE2,
+//     };
 
-    adc_digi_pattern_config_t adc_pattern = {
-        .atten = ADC_ATTEN_DB_12,
-        .channel = ADC_CHANNEL_4,     // ADC1_CHANNEL_4 →5 (ESP32-S3))
-        .unit = ADC_UNIT_1,
-        .bit_width = ADC_BITWIDTH_12,
-    };
+//     adc_digi_pattern_config_t adc_pattern = {
+//         .atten = ADC_ATTEN_DB_12,
+//         .channel = ADC_CHANNEL_4,     // ADC1_CHANNEL_4 →5 (ESP32-S3))
+//         .unit = ADC_UNIT_1,
+//         .bit_width = ADC_BITWIDTH_12,
+//     };
 
-    dig_cfg.pattern_num = 1;
-    dig_cfg.adc_pattern = &adc_pattern;
+//     dig_cfg.pattern_num = 1;
+//     dig_cfg.adc_pattern = &adc_pattern;
 
-    ESP_ERROR_CHECK(adc_continuous_config(adc_handle, &dig_cfg));
-    ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
+//     ESP_ERROR_CHECK(adc_continuous_config(adc_handle, &dig_cfg));
+//     ESP_ERROR_CHECK(adc_continuous_start(adc_handle));
 
-    ESP_LOGI(TAG, "ADC continuous sampling started on unit %d, channel %d (GPIO%d)",
-             adc_pattern.unit, adc_pattern.channel, di_pin[2]);
+//     ESP_LOGI(TAG, "ADC continuous sampling started on unit %d, channel %d (GPIO%d)",
+//              adc_pattern.unit, adc_pattern.channel, di_pin[2]);
 
-    // === 流量传感器 GPIO 初始化 ===
-    gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_POSEDGE,
-        .mode = GPIO_MODE_INPUT,
-        .pin_bit_mask = 1ULL << di_pin[3],
-        .pull_up_en = GPIO_PULLUP_ENABLE,
-    };
-    gpio_config(&io_conf);
-    ESP_LOGI(TAG, "Flow sensor input initialized on pin %d", di_pin[3]);
+//     // === 流量传感器 GPIO 初始化 ===
+//     gpio_config_t io_conf = {
+//         .intr_type = GPIO_INTR_POSEDGE,
+//         .mode = GPIO_MODE_INPUT,
+//         .pin_bit_mask = 1ULL << di_pin[3],
+//         .pull_up_en = GPIO_PULLUP_ENABLE,
+//     };
+//     gpio_config(&io_conf);
+//     ESP_LOGI(TAG, "Flow sensor input initialized on pin %d", di_pin[3]);
 
-    gpio_install_isr_service(0);
-    gpio_isr_handler_add(di_pin[3], flow_isr_handler, NULL);
+//     gpio_install_isr_service(0);
+//     gpio_isr_handler_add(di_pin[3], flow_isr_handler, NULL);
 
-    // === 创建任务 ===
-    xTaskCreate(sensor_task, "flow_sensor_task", 4096, NULL, 5, NULL);
-    xTaskCreate(ntc_task, "ntc_task", 4096, NULL, 5, NULL);
+//     // === 创建任务 ===
+//     xTaskCreate(sensor_task, "flow_sensor_task", 4096, NULL, 5, NULL);
+//     xTaskCreate(ntc_task, "ntc_task", 4096, NULL, 5, NULL);
 
-    return ret;
-}
+//     return ret;
+// }
 
 /*******************************************************************************
 ****@brief: 设置指定 DO 引脚的输出电平
