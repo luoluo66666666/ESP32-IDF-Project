@@ -75,39 +75,17 @@ void mode_control_task(void *pvParameters)
 
 void app_main(void)
 {
-    pin_init();
-    ctrl_protocol_init(); // Initialize the control protocol
-    Wifi_task();          // 启动wifi模块
+    // pin_init();
+    // ctrl_protocol_init(); // Initialize the control protocol
+    // Wifi_task();          // 启动wifi模块
 
     ble_task(); // 启动BLE任务
     // Temp_task();
     // sensor_init();
-    // rs485_task();
+    rs485_task();
     // // 创建控制任务
     // xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     // xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }
 
 
-
-// #define TEST_GPIO  4 // 改成你要测的GPIO号
-
-// // void app_main(void)
-// // {
-// //     gpio_config_t io_conf = {
-// //         .pin_bit_mask = 1ULL << TEST_GPIO,
-// //         .mode = GPIO_MODE_OUTPUT,
-// //         .pull_down_en = 0,
-// //         .pull_up_en = 0,
-// //         .intr_type = GPIO_INTR_DISABLE,
-// //     };
-// //     gpio_config(&io_conf);
-
-// //     while (1) {
-// //         gpio_set_level(TEST_GPIO, 1);
-// //         vTaskDelay(pdMS_TO_TICKS(500));
-// //         gpio_set_level(TEST_GPIO, 0);
-// //         vTaskDelay(pdMS_TO_TICKS(500));
-// //         ESP_LOGI(TAG, "GPIO TEST");
-// //     }
-// // }

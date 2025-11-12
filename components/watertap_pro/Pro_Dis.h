@@ -58,7 +58,7 @@ union	byte_def{
 //----------------------------------------------------------//
 
 typedef enum 
-{
+{ 
 	OpNone,
 	OpIdle,
 	wTemp,
@@ -152,7 +152,7 @@ PRO_EXTERN				union byte_def  SysInfounionII;
 #define get_ProData     gpio_get_level(Temp_DATA_GPIO)  // 读取 PRO_DATA 引脚电平
 
 
-#define TIME_IDLE  5
+#define TIME_IDLE  20
 
 extern unsigned char bPro_Init;
 

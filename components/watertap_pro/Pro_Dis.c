@@ -10,11 +10,26 @@
 #include "esp_timer.h"
 
 #include "esp_log.h"
+#include "soc/gpio_struct.h"  // 提供 GPIO 寄存器结构体定义
+
+
 
 static const char *TAG = "ProDis";
 
-#define Temp_CLK_GPIO GPIO_NUM_2
-#define Temp_DATA_GPIO GPIO_NUM_4
+#define Temp_CLK_GPIO GPIO_NUM_17
+#define Temp_DATA_GPIO GPIO_NUM_18
+
+void com_delay(unsigned char t)
+{
+	unsigned char i;
+	for (i = 0; i < t; i++)
+		;
+}
+
+void com_delay_us(uint32_t t_us)
+{
+    esp_rom_delay_us(t_us);  // 延时 t_us 微秒
+}
 
 // Clk取反
 void Anti_ProClk()
@@ -28,6 +43,22 @@ void Anti_ProClk()
 	{
 		Clr_Pro_CLK;
 	}
+	com_delay_us(5);
+}
+
+static inline void Anti_ProClk_IRAM()
+{
+    bClk = !bClk;
+    if (bClk)
+    {
+        // 直接操作寄存器
+        GPIO.out_w1ts = (1 << Temp_CLK_GPIO); // 高电平
+    }
+    else
+    {
+        GPIO.out_w1tc = (1 << Temp_CLK_GPIO); // 低电平
+    }
+    esp_rom_delay_us(5); // 微秒级延时
 }
 
 //--------------------------------------------------------------------//
@@ -54,42 +85,48 @@ void ProDis_Init(void)
 	bPro_Init = 1;
 }
 
-void com_delay(unsigned char t)
-{
-	unsigned char i;
-	for (i = 0; i < t; i++)
-		;
-}
-
 //--------------------------------------------------------------------//
 // 设置数据端口输入/输出
 //--------------------------------------------------------------------//
 void ProDis_DataIOSet(unsigned char kType)
 {
-#ifdef exchangcom
-	gpio_num_t pin = Temp_CLK_GPIO; // 替换原来的 GPIO_Pin_9
-#else
-	gpio_num_t pin = Temp_DATA_GPIO; // 替换原来的 GPIO_Pin_10
-#endif
+    uint32_t pin;
+    
+    #ifdef exchangcom
+        pin = Temp_CLK_GPIO; // 备用端口
+    #else
+        pin = Temp_DATA_GPIO;
+    #endif
 
-	gpio_config_t io_conf = {
-		.pin_bit_mask = (1ULL << pin),
-		.pull_up_en = GPIO_PULLUP_DISABLE,
-		.pull_down_en = GPIO_PULLDOWN_DISABLE,
-		.intr_type = GPIO_INTR_DISABLE};
+    gpio_config_t io_conf = {
+        .pin_bit_mask = (1ULL << pin),
+        .intr_type = GPIO_INTR_DISABLE,    // 禁用中断
+        .mode = GPIO_MODE_OUTPUT_OD,          // 默认先设置为输出
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE
+    };
 
-	if (kType == 0) // 输出模式
-	{
-		io_conf.mode = GPIO_MODE_OUTPUT;
-	}
-	else if (kType == 1) // 输入模式，上拉输入
-	{
-		io_conf.mode = GPIO_MODE_INPUT;
-		io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-	}
-
-	gpio_config(&io_conf);
+    if (kType == 0)
+    {
+        // 输出模式（推挽输出）
+        io_conf.mode = GPIO_MODE_OUTPUT_OD;      // 推挽输出
+        io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+		
+        gpio_config(&io_conf);
+    }
+    else if (kType == 1)
+    {
+        // 输入模式，带上拉
+        io_conf.mode = GPIO_MODE_INPUT;
+        io_conf.pull_up_en = GPIO_PULLUP_ENABLE;  // 内部上拉
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+		
+        gpio_config(&io_conf);
+    }
 }
+
+
 //--------------------------------------------------------------------//
 // 通信程序,1ms中断调用
 //--------------------------------------------------------------------//
@@ -195,10 +232,10 @@ void ProDis_Run1ms(void)
 					levelck[1] = 0;
 					levelck[2] = 0;
 
-					com_delay(50);
+					com_delay_us(5);
 					levelck[1] = get_ProData;
 
-					com_delay(50);
+					com_delay_us(5);
 					levelck[2] = get_ProData;
 
 					if (levelck[0] != levelck[1])
@@ -229,7 +266,7 @@ void ProDis_Run1ms(void)
 				break;
 			}
 
-			Anti_ProClk();
+			Anti_ProClk_IRAM();
 			OpCnt--;
 
 			if (OpCnt == 0)
@@ -535,117 +572,115 @@ void Post_Set_SpeedFlag(INT8U set_flag, INT8U set_speed)
 	SysInfoSet |= set_speed;
 }
 
-
 /* 用于从 ISR 唤醒任务的二值信号量 */
 static SemaphoreHandle_t prodis_sem = NULL;
 static void IRAM_ATTR prodis_timer_isr(void *arg)
 {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    if (prodis_sem) {
-        xSemaphoreGiveFromISR(prodis_sem, &xHigherPriorityTaskWoken);
-    }
-    if (xHigherPriorityTaskWoken == pdTRUE) {
-        portYIELD_FROM_ISR();
-    }
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	if (prodis_sem)
+	{
+		xSemaphoreGiveFromISR(prodis_sem, &xHigherPriorityTaskWoken);
+	}
+	if (xHigherPriorityTaskWoken == pdTRUE)
+	{
+		portYIELD_FROM_ISR();
+	}
 }
 
 void ProDis_TimerInit(void)
 {
-    // 创建信号量（先创建）
-    prodis_sem = xSemaphoreCreateBinary();
-    if (prodis_sem == NULL) {
-        ESP_LOGE(TAG, "create sem fail");
-        return;
-    }
+	// 创建信号量（先创建）
+	prodis_sem = xSemaphoreCreateBinary();
+	if (prodis_sem == NULL)
+	{
+		ESP_LOGE(TAG, "create sem fail");
+		return;
+	}
 
-    const esp_timer_create_args_t timer_args = {
-        .callback = &prodis_timer_isr,
-        .name = "prodis_timer",
+	const esp_timer_create_args_t timer_args = {
+		.callback = &prodis_timer_isr,
+		.name = "prodis_timer",
 #ifdef CONFIG_ESP_TIMER_SUPPORTS_ISR_DISPATCH_METHOD
-        .dispatch_method = ESP_TIMER_ISR, // 如果 enabled，会在 ISR 中运行
+		.dispatch_method = ESP_TIMER_ISR, // 如果 enabled，会在 ISR 中运行
 #else
-        .dispatch_method = ESP_TIMER_TASK, // 否则在 esp_timer 任务中运行
+		.dispatch_method = ESP_TIMER_TASK, // 否则在 esp_timer 任务中运行
 #endif
-    };
+	};
 
-    esp_timer_handle_t timer_handle;
-    ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer_handle));
-    ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handle, 1000)); // 1000 us = 1ms
+	esp_timer_handle_t timer_handle;
+	ESP_ERROR_CHECK(esp_timer_create(&timer_args, &timer_handle));
+	ESP_ERROR_CHECK(esp_timer_start_periodic(timer_handle, 1000)); // 1000 us = 1ms
 
-    ESP_LOGI(TAG, "ProDis timer started (1ms)");
+	ESP_LOGI(TAG, "ProDis timer started (1ms)");
 }
 
-
-// void ProDis_Run1ms(void)
+// void ProDis_Task(void *pvParameters)
 // {
-// 	static bool flag = false;
-// 	if (flag)
-// 	{
-// 		Set_Pro_CLK;
-// 	}
-// 	else
-// 	{
-// 		Clr_Pro_CLK;
-// 	}
-// 	flag = !flag;
+//     // 优先级可以设置较高，栈视 ProDis_Run1ms 的复杂程度调整
+//     while (1) {
+//         // 等待信号量（阻塞），超时可设置为 e.g. 5 ms 以便处理其它逻辑
+//         if (xSemaphoreTake(prodis_sem, portMAX_DELAY) == pdTRUE) {
+//             // 在任务上下文安全执行复杂逻辑
+//             ProDis_Run1ms();
+//         }
+//     }
 // }
-
 
 void ProDis_Task(void *pvParameters)
 {
-    // 优先级可以设置较高，栈视 ProDis_Run1ms 的复杂程度调整
-    while (1) {
-        // 等待信号量（阻塞），超时可设置为 e.g. 5 ms 以便处理其它逻辑
-        if (xSemaphoreTake(prodis_sem, portMAX_DELAY) == pdTRUE) {
-            // 在任务上下文安全执行复杂逻辑
-            ProDis_Run1ms();
-        }
-    }
+	uint64_t last_time = esp_timer_get_time();
+	while (1)
+	{
+		uint64_t now = esp_timer_get_time();
+		if (now - last_time >= 1000)
+		{ // 1ms
+			last_time += 1000;
+			ProDis_Run1ms();
+		}
+		vTaskDelay(1); // 避免 CPU 空转
+	}
 }
-
 
 // ----------------- 1ms 调用任务 -----------------
 void Temp_Task1ms(void *arg)
 {
-    while (1) {
-        ProDis_Run1ms();
-        vTaskDelay(pdMS_TO_TICKS(1));  // 1ms
-    }
+	while (1)
+	{
+		ProDis_Run1ms();
+		vTaskDelay(pdMS_TO_TICKS(1)); // 1ms
+	}
 }
 
 // ----------------- 100ms 调用任务 -----------------
 void Temp_Task100ms(void *arg)
 {
-    while (1)
-    {
-        // 调用获取数据函数
-        Pro_Run100ms();
+	while (1)
+	{
+		// 调用获取数据函数
+		Pro_Run100ms();
 
-        // 打印出水温度、流量、电源类型、电池电量、通信状态
-        ESP_LOGI(TAG, "Temperature: %d°C, Flow: %d, Power: %s, BatteryLV: %d, COMErr: %s",
-                 ReadTemp,
-                 Flow_CurVal,
-                 (Get_PwType == 0 ? "Battery" : "DC12V"),
-                 Get_BellLV,
-                 (bCOMErr ? "Error" : "OK"));
+		// 打印出水温度、流量、电源类型、电池电量、通信状态
+		// ESP_LOGI(TAG, "Temperature: %d°C, Flow: %d, Power: %s, BatteryLV: %d, COMErr: %s",
+		//          ReadTemp,
+		//          Flow_CurVal,
+		//          (Get_PwType == 0 ? "Battery" : "DC12V"),
+		//          Get_BellLV,
+		//          (bCOMErr ? "Error" : "OK"));
 
-        // 延时100ms
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
+		// 延时100ms
+		vTaskDelay(pdMS_TO_TICKS(100));
+	}
 }
-
 
 void Temp_task(void)
 {
 	ProDis_Init();
 	ProDis_TimerInit();
-	    // 创建 1ms 通信任务
+	// 创建 1ms 通信任务
 	xTaskCreate(Temp_Task100ms, "Temp_Task100ms", 4096, NULL, 5, NULL);
-    // xTaskCreate(Temp_Task1ms, "Temp_Task1ms", 4096, NULL, 10, NULL);
+	// xTaskCreate(Temp_Task1ms, "Temp_Task1ms", 4096, NULL, 10, NULL);
 	xTaskCreate(ProDis_Task, "ProDis_Task", 4096, NULL, 3, NULL);
-    ESP_LOGI(TAG, "ProDis Task started");
+	ESP_LOGI(TAG, "ProDis Task started");
 
-    // 创建 100ms 数据读取任务
-    
-
+	// 创建 100ms 数据读取任务
 }

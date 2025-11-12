@@ -37,7 +37,17 @@
         "random": "c",
         "sdkconfig.h": "c",
         "queue.h": "c",
-        "bitset": "c"
+        "bitset": "c",
+        "stdbool.h": "c",
+        "charconv": "c",
+        "chrono": "c",
+        "optional": "c",
+        "ratio": "c",
+        "system_error": "c",
+        "functional": "c",
+        "regex": "c",
+        "tuple": "c",
+        "utility": "c"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM14"
