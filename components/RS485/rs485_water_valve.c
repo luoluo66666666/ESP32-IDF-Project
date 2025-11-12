@@ -402,7 +402,7 @@ void temp_test_sequence(void)
     vTaskDelay(pdMS_TO_TICKS(200));
 
     // 2️⃣ 0x0001 寄存器写入 0x0023 —— 设置温度 35℃
-    temp_rs485_write_register(addr, 0x0001, 0x0026);
+    temp_rs485_write_register(addr, 0x0001, 0x0030);
     vTaskDelay(pdMS_TO_TICKS(200));
 
     // 3️⃣ 读取 0x0000 起始的 2 个寄存器（系统信息 + 当前温度）
