@@ -50,5 +50,5 @@
         "utility": "c"
     },
     "idf.flashType": "UART",
-    "idf.portWin": "COM14"
+    "idf.portWin": "COM8"
 }

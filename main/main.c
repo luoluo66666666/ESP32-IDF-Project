@@ -80,6 +80,7 @@ void app_main(void)
     // Wifi_task();          // 启动wifi模块
 
     ble_task(); // 启动BLE任务
+    Temp_task();
     // Temp_task();
     // sensor_init();
     rs485_task();
