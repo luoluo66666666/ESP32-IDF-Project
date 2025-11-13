@@ -427,8 +427,8 @@ void temp_valve_poll_task(void *arg)
 {
     uint8_t addr = 1;
 
-    temp_valve_power_on(addr, 3);
-    temp_valve_set_temperature(addr, 40);
+    // temp_valve_power_on(addr, 3);
+    // temp_valve_set_temperature(addr, 40);
 
     while (1)
     {
@@ -452,5 +452,5 @@ void temp_valve_poll_task(void *arg)
 void rs485_task(void)
 {
     RS485_init();
-    xTaskCreate(temp_valve_poll_task, "temp_valve_poll_task", 4096, NULL, 5, NULL);
+    xTaskCreate(temp_valve_poll_task, "temp_valve_poll_task", 4096, NULL, 10, NULL);
 }

@@ -47,8 +47,9 @@
         "functional": "c",
         "regex": "c",
         "tuple": "c",
-        "utility": "c"
+        "utility": "c",
+        "rs485_water_valve.h": "c"
     },
     "idf.flashType": "UART",
-    "idf.portWin": "COM8"
+    "idf.portWin": "COM14"
 }

@@ -10,7 +10,6 @@
 #include <esp_log.h>
 #include "rs485_water_valve.h"
 
-#include "Pro_Dis.h"
 
 
 static const char *TAG = "current MODE";
@@ -76,16 +75,16 @@ void mode_control_task(void *pvParameters)
 void app_main(void)
 {
     // pin_init();
-    // ctrl_protocol_init(); // Initialize the control protocol
+    ctrl_protocol_init(); // Initialize the control protocol
     // Wifi_task();          // 启动wifi模块
 
     ble_task(); // 启动BLE任务
     // Temp_task();
     // Temp_task();
     // sensor_init();
-    rs485_task();
+    // rs485_task();
     // // 创建控制任务
-    // xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
+    xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     // xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }
 

@@ -8,7 +8,7 @@
 
 #include "esp_log.h"
 
-#include "mode_ctrl.h"                         // 引入模式控制相关函数的头文件
+#include "mode_ctrl.h" // 引入模式控制相关函数的头文件
 #include "rs485_water_valve.h"
 extern EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 // EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
@@ -446,35 +446,74 @@ void ctrl_protocol(char *input, char *output, int maxlen)
         }
     }
 
-    /* 5. 阀门控制命令： valve set/get*/
-    if (strncasecmp(input, "valve", 5) == 0)
+    /* 5. 阀门控制命令： water set/get*/
+    if (strncasecmp(input, "water", 5) == 0)
     {
         char action[16] = {0};
         int value = 0;
         RS485_init();
 
         // 支持格式：
-        //   valve set 45
-        //   valve get
-        if (sscanf(input, "valve %15s %d", action, &value) >= 1)
+        //   water set 45
+        //   water get
+        if (sscanf(input, "water %15s %d", action, &value) >= 1)
         {
             if (strcasecmp(action, "set") == 0)
             {
                 // 写入阀门开度寄存器（40006 -> 0x0005）
-                rs485_write_register(0x01,0x0005, value);
-                snprintf(output, maxlen, "VALVE,SET,%d\r\n", value);
+                rs485_write_register(0x01, 0x0005, value);
+                snprintf(output, maxlen, "WATER,SET,%d\r\n", value);
                 return;
             }
             else if (strcasecmp(action, "get") == 0)
             {
                 // 读取寄存器区间 40001~40013 (0x0000~0x000C)
-                rs485_read_register(0x01,0x0000, 12);
-                snprintf(output, maxlen, "VALVE,READ_OK\r\n");
+                rs485_read_register(0x01, 0x0000, 12);
+                snprintf(output, maxlen, "WATER,READ_OK\r\n");
                 return;
             }
         }
     }
 
+    /* 6. 恒温宝控制命令： temp set/get*/
+    if (strncasecmp(input, "temp", 4) == 0)
+    {
+        char action[16] = {0};
+        int value = 0;
+        int args = sscanf(input, "temp %15s %d", action, &value);
+
+        if (args >= 1)
+        {
+            if (strcasecmp(action, "set") == 0)
+            {
+                // 写入温度设定寄存器（0x0001），单位：℃
+                temp_rs485_write_register(0x01, 0x0001, (uint16_t)value);
+                snprintf(output, maxlen, "TEMP,SET,%d\r\n", value);
+            }
+            else if (strcasecmp(action, "get") == 0)
+            {
+                // 读取起始寄存器 0x0001，共4个寄存器（温度/设定温度/流量等）
+                temp_rs485_read_register(0x01, 0x0001, 4);
+                snprintf(output, maxlen, "TEMP,READ_OK\r\n");
+            }
+            else if (strcasecmp(action, "test") == 0)
+            {
+                // 执行测试流程：开机 + 一次读取0x0001起始的4个寄存器
+                temp_test_sequence();
+                snprintf(output, maxlen, "TEMP,TEST,OK\r\n");
+            }
+            else
+            {
+                snprintf(output, maxlen, "TEMP,ERR,UNKNOWN_ACTION\r\n");
+            }
+        }
+        else
+        {
+            snprintf(output, maxlen, "TEMP,ERR,BAD_FORMAT\r\n");
+        }
+
+        return;
+    }
     /*  未知命令 */
     ESP_LOGE(TAG, "Invalid command");
     snprintf(output, maxlen, "CMD:ERR\r\n");
