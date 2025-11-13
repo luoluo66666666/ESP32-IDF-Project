@@ -38,8 +38,21 @@
         "sdkconfig.h": "c",
         "queue.h": "c",
         "bitset": "c",
+<<<<<<< HEAD
         "semphr.h": "c",
         "event_groups.h": "c"
+=======
+        "stdbool.h": "c",
+        "charconv": "c",
+        "chrono": "c",
+        "optional": "c",
+        "ratio": "c",
+        "system_error": "c",
+        "functional": "c",
+        "regex": "c",
+        "tuple": "c",
+        "utility": "c"
+>>>>>>> 50141ec0a3bb31456b0023010c59ff746cb333b9
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM8"
