@@ -53,7 +53,7 @@ void mode_control_task(void *pvParameters)
             xEventGroupClearBits(event_ctrl_protocol, Mode3_BIT); // 手动清除事件位
             break;
         case Mode4_BIT:
-            ESP_LOGI(TAG, "Mode 3 activated");
+            ESP_LOGI(TAG, "Mode 4 activated");
             mode4();                                              // 调用模式4的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode4_BIT); // 手动清除事件位
             break;
@@ -80,12 +80,12 @@ void app_main(void)
     Wifi_task();          // 启动wifi模块
 
     ble_task(); // 启动BLE任务
-    Temp_task();
+    // Temp_task();
     // Temp_task();
     // sensor_init();
     // rs485_task();
     // // 创建控制任务
-    // xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
+    xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     // xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }
 

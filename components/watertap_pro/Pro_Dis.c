@@ -8,13 +8,17 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 #include "esp_timer.h"
+#include "gatt_svc.h"
 
 #include "esp_log.h"
 
 static const char *TAG = "ProDis";
 
+
+extern QueueHandle_t ble_tx_queue;
+
 #define Temp_CLK_GPIO GPIO_NUM_2
-#define Temp_DATA_GPIO GPIO_NUM_4
+#define Temp_DATA_GPIO GPIO_NUM_1
 
 // Clk取反
 void Anti_ProClk()
@@ -98,276 +102,298 @@ void ProDis_DataIOSet(unsigned char kType)
 //--------------------------------------------------------------------//
 void ProDis_Run1ms(void)
 {
-    static Int8 ctrbyte;
-    static Int8 rdctrbyte;
-    Int8 tmp, levelck[3], proda_tmp;
+	static Int8 ctrbyte;
+	static Int8 rdctrbyte;
+	Int8 tmp, levelck[3], proda_tmp;
 
-    if (Idle_Time)  //空闲
-    {		
-        Set_Pro_CLK;
-        bClk = 1;
+	if (Idle_Time) // 空闲
+	{
+		Set_Pro_CLK;
+		bClk = 1;
 
-        if (Idle_Time < TIME_IDLE)
-        {
-            // 原来是 GPIO_InitStructure -> 改为 ESP-IDF 配置
+		if (Idle_Time < TIME_IDLE)
+		{
+			// 原来是 GPIO_InitStructure -> 改为 ESP-IDF 配置
 #ifdef exchangcom
-            gpio_config_t io_conf = {
-                .pin_bit_mask = (1ULL << GPIO_NUM_9),
-                .mode = GPIO_MODE_OUTPUT,
-                .pull_up_en = GPIO_PULLUP_DISABLE,
-                .pull_down_en = GPIO_PULLDOWN_DISABLE,
-                .intr_type = GPIO_INTR_DISABLE
-            };
+			gpio_config_t io_conf = {
+				.pin_bit_mask = (1ULL << GPIO_NUM_9),
+				.mode = GPIO_MODE_OUTPUT,
+				.pull_up_en = GPIO_PULLUP_DISABLE,
+				.pull_down_en = GPIO_PULLDOWN_DISABLE,
+				.intr_type = GPIO_INTR_DISABLE};
 #else
-            gpio_config_t io_conf = {
-                .pin_bit_mask = (1ULL << Temp_DATA_GPIO),
-                .mode = GPIO_MODE_OUTPUT,
-                .pull_up_en = GPIO_PULLUP_DISABLE,
-                .pull_down_en = GPIO_PULLDOWN_DISABLE,
-                .intr_type = GPIO_INTR_DISABLE
-            };
+			gpio_config_t io_conf = {
+				.pin_bit_mask = (1ULL << Temp_DATA_GPIO),
+				.mode = GPIO_MODE_OUTPUT,
+				.pull_up_en = GPIO_PULLUP_DISABLE,
+				.pull_down_en = GPIO_PULLDOWN_DISABLE,
+				.intr_type = GPIO_INTR_DISABLE};
 #endif
-            gpio_config(&io_conf);
+			gpio_config(&io_conf);
 
-            Set_Pro_DATA;
-        }
-        Idle_Time--;
-    }
-    else
-    {
-        if (OpCnt)
-        {
-            switch (OpCnt)
-            {
-                case 40:
-                case 38:
-                case 36:
-                case 34:
-                    ProDis_DataIOSet(0);
-                    if (ctrbyte & 0x08)
-                        Set_Pro_DATA;
-                    else
-                        Clr_Pro_DATA;
-                    ctrbyte <<= 1;
-                    break;
+			Set_Pro_DATA;
+		}
+		Idle_Time--;
+	}
+	else
+	{
+		if (OpCnt)
+		{
+			switch (OpCnt)
+			{
+			case 40:
+			case 38:
+			case 36:
+			case 34:
+				ProDis_DataIOSet(0);
+				if (ctrbyte & 0x08)
+					Set_Pro_DATA;
+				else
+					Clr_Pro_DATA;
+				ctrbyte <<= 1;
+				break;
 
-                case 32: case 30: case 28: case 26:
-                case 24: case 22: case 20: case 18:
-                case 16: case 14: case 12: case 10:
-                case 8:  case 6:  case 4:  case 2:
-                    if (bWrite)
-                    {
-                        ProDis_DataIOSet(0);
-                        if (ProSend & 0x8000)
-                            Set_Pro_DATA;
-                        else
-                            Clr_Pro_DATA;
-                        ProSend <<= 1;
-                    }
-                    else
-                    {
-                        ProDis_DataIOSet(1);
-                        ProRead <<= 1;
-                    }
-                    break;
+			case 32:
+			case 30:
+			case 28:
+			case 26:
+			case 24:
+			case 22:
+			case 20:
+			case 18:
+			case 16:
+			case 14:
+			case 12:
+			case 10:
+			case 8:
+			case 6:
+			case 4:
+			case 2:
+				if (bWrite)
+				{
+					ProDis_DataIOSet(0);
+					if (ProSend & 0x8000)
+						Set_Pro_DATA;
+					else
+						Clr_Pro_DATA;
+					ProSend <<= 1;
+				}
+				else
+				{
+					ProDis_DataIOSet(1);
+					ProRead <<= 1;
+				}
+				break;
 
-                case 33: case 31: case 29: case 27:
-                case 25: case 23: case 21: case 19:
-                case 17: case 15: case 13: case 11:
-                case 9:  case 7:  case 5:  case 3:
-                case 1:
-                    if (!bWrite)
-                    {
-                        levelck[0] = get_ProData;
-                        levelck[1] = 0;
-                        levelck[2] = 0;
+			case 33:
+			case 31:
+			case 29:
+			case 27:
+			case 25:
+			case 23:
+			case 21:
+			case 19:
+			case 17:
+			case 15:
+			case 13:
+			case 11:
+			case 9:
+			case 7:
+			case 5:
+			case 3:
+			case 1:
+				if (!bWrite)
+				{
+					levelck[0] = get_ProData;
+					levelck[1] = 0;
+					levelck[2] = 0;
 
-                        com_delay(50);
-                        levelck[1] = get_ProData;  
+					com_delay(50);
+					levelck[1] = get_ProData;
 
-                        com_delay(50);
-                        levelck[2] = get_ProData;
+					com_delay(50);
+					levelck[2] = get_ProData;
 
-                        if (levelck[0] != levelck[1])
-                            proda_tmp = levelck[2];
-                        else if (levelck[0] != levelck[2])
-                            proda_tmp = levelck[1];
-                        else if (levelck[1] != levelck[2])
-                            proda_tmp = levelck[0];
-                        else
-                            proda_tmp = levelck[0];
+					if (levelck[0] != levelck[1])
+						proda_tmp = levelck[2];
+					else if (levelck[0] != levelck[2])
+						proda_tmp = levelck[1];
+					else if (levelck[1] != levelck[2])
+						proda_tmp = levelck[0];
+					else
+						proda_tmp = levelck[0];
 
-                        if (proda_tmp)
-                            ProRead |= 1;
-                    }
-                    break;
+					if (proda_tmp)
+						ProRead |= 1;
+				}
+				break;
 
-                default:
-                    break;
-            }
+			default:
+				break;
+			}
 
-            Anti_ProClk();
-            OpCnt--;
+			Anti_ProClk();
+			OpCnt--;
 
-            if (OpCnt == 0)
-            {
-                Idle_Time = TIME_IDLE;
-                if (!bWrite)
-                {
-                    if (((ProRead & 0x00ff) ^ ((ProRead >> 8) & 0xff)) == 0xff)
-                    {
-                        ErrTime = 50;
-                        switch (rdctrbyte)
-                        {
-                            case 8:
-                                ReadTemp = (Int8)((ProRead >> 8) & 0xff);
-                                break;
+			if (OpCnt == 0)
+			{
+				Idle_Time = TIME_IDLE;
+				if (!bWrite)
+				{
+					if (((ProRead & 0x00ff) ^ ((ProRead >> 8) & 0xff)) == 0xff)
+					{
+						ErrTime = 50;
+						switch (rdctrbyte)
+						{
+						case 8:
+							ReadTemp = (Int8)((ProRead >> 8) & 0xff);
+							break;
 
-                            case 9:
-                                ReadFlowL = (INT8U)((ProRead >> 8) & 0xff);
-                                bRd_FlowL = 1;
-                                break;
+						case 9:
+							ReadFlowL = (INT8U)((ProRead >> 8) & 0xff);
+							bRd_FlowL = 1;
+							break;
 
-                            case 0x0c:
-                                ReadFlowH = (INT8U)((ProRead >> 8) & 0xff);
-                                bRd_FlowH = 1;
-                                break;
+						case 0x0c:
+							ReadFlowH = (INT8U)((ProRead >> 8) & 0xff);
+							bRd_FlowH = 1;
+							break;
 
-                            case 0x0b:
-                                Read_DevID = (INT8U)((ProRead >> 8) & 0xff);
-                                break;
+						case 0x0b:
+							Read_DevID = (INT8U)((ProRead >> 8) & 0xff);
+							break;
 
-                            case 10:
-                                ReadErrCode = (Int8)((ProRead >> 8) & 0xff);
-                                break;
+						case 10:
+							ReadErrCode = (Int8)((ProRead >> 8) & 0xff);
+							break;
 
-                            default:
-                                break;
-                        }
-                    }	
-                    ProRead = 0;
-                    rdctrbyte = 0;			
-                }
-            }
-        }
-        else
-        {
-            OpCnt = 40;
-            Clr_Pro_CLK;
-            Clr_Pro_DATA;
-            bClk = FALSE;
-            
-            if (EmcOp)
-            {
-                tmp = EmcOp;
-                EmcOp = OpNone;
-            }
-            else if (FlowDataSetBck != Flwo_SendData)
-            {
-                FlowDataSetBck = Flwo_SendData;
-                tmp = wFlow;
-            }	
-            else if (SysInfoBK != SysInfounion.byte)
-            {
-                SysInfoBK = SysInfounion.byte;
-                tmp = wSysInfo;
-            }
-            else if (TempDataSetBck != TempDataSet)
-            {
-                TempDataSetBck = TempDataSet;
-                tmp = wTemp;
-            }			
-            else
-            {
-                tmp = NextOp;
-                NextOp++;
-                if (NextOp > rErr)
-                    NextOp = wTemp;
-            }
+						default:
+							break;
+						}
+					}
+					ProRead = 0;
+					rdctrbyte = 0;
+				}
+			}
+		}
+		else
+		{
+			OpCnt = 40;
+			Clr_Pro_CLK;
+			Clr_Pro_DATA;
+			bClk = FALSE;
 
-            switch (tmp)
-            {
-                case OpIdle:
-                case OpNone:
-                    OpCnt = 0;
-                    Idle_Time = TIME_IDLE;
-                    bWrite = 0;
-                    ProDis_DataIOSet(0);
-                    break;
+			if (EmcOp)
+			{
+				tmp = EmcOp;
+				EmcOp = OpNone;
+			}
+			else if (FlowDataSetBck != Flwo_SendData)
+			{
+				FlowDataSetBck = Flwo_SendData;
+				tmp = wFlow;
+			}
+			else if (SysInfoBK != SysInfounion.byte)
+			{
+				SysInfoBK = SysInfounion.byte;
+				tmp = wSysInfo;
+			}
+			else if (TempDataSetBck != TempDataSet)
+			{
+				TempDataSetBck = TempDataSet;
+				tmp = wTemp;
+			}
+			else
+			{
+				tmp = NextOp;
+				NextOp++;
+				if (NextOp > rErr)
+					NextOp = wTemp;
+			}
 
-                case wTemp:
-                    ctrbyte = 0x00;
-                    ProSend = TempDataSet;
-                    ProSend <<= 8;
-                    ProSend |= TempDataSet ^ 0xff;
-                    bWrite = 1;
-                    ProDis_DataIOSet(0);
-                    break;
+			switch (tmp)
+			{
+			case OpIdle:
+			case OpNone:
+				OpCnt = 0;
+				Idle_Time = TIME_IDLE;
+				bWrite = 0;
+				ProDis_DataIOSet(0);
+				break;
 
-                case wFlow:
-                    ctrbyte = 0x01;
-                    ProSend = FlowDataSet;
-                    ProSend <<= 8;
-                    ProSend |= FlowDataSet ^ 0xff;
-                    bWrite = 1;
-                    ProDis_DataIOSet(0);
-                    break;
+			case wTemp:
+				ctrbyte = 0x00;
+				ProSend = TempDataSet;
+				ProSend <<= 8;
+				ProSend |= TempDataSet ^ 0xff;
+				bWrite = 1;
+				ProDis_DataIOSet(0);
+				break;
 
-                case wSysInfo:
-                    ctrbyte = 0x02;
-                    ProSend = SysInfoSet;
-                    ProSend <<= 8;
-                    ProSend |= SysInfoSet ^ 0xff;
-                    bWrite = 1;
-                    ProDis_DataIOSet(0);
-                    break;
+			case wFlow:
+				ctrbyte = 0x01;
+				ProSend = FlowDataSet;
+				ProSend <<= 8;
+				ProSend |= FlowDataSet ^ 0xff;
+				bWrite = 1;
+				ProDis_DataIOSet(0);
+				break;
 
-                case rTemp:
-                case rTemp1:
-                    ctrbyte = 0x08;
-                    ProRead = 0;
-                    bWrite = 0;
-                    rdctrbyte = 8;
-                    ProDis_DataIOSet(0);
-                    break;
+			case wSysInfo:
+				ctrbyte = 0x02;
+				ProSend = SysInfoSet;
+				ProSend <<= 8;
+				ProSend |= SysInfoSet ^ 0xff;
+				bWrite = 1;
+				ProDis_DataIOSet(0);
+				break;
 
-                case rFlow:
-                    ctrbyte = 0x09;
-                    ProRead = 0;
-                    bWrite = 0;
-                    rdctrbyte = 9;
-                    ProDis_DataIOSet(0);
-                    break;
+			case rTemp:
+			case rTemp1:
+				ctrbyte = 0x08;
+				ProRead = 0;
+				bWrite = 0;
+				rdctrbyte = 8;
+				ProDis_DataIOSet(0);
+				break;
 
-                case rFlowH:
-                    ctrbyte = 0x0c;
-                    ProRead = 0;
-                    bWrite = 0;
-                    rdctrbyte = 0x0c;
-                    ProDis_DataIOSet(0);
-                    break;
-                
-                case rDevID:
-                    ctrbyte = 0x0b;
-                    ProRead = 0;
-                    bWrite = 0;
-                    rdctrbyte = 0x0b;
-                    ProDis_DataIOSet(0);
-                    break;
-                
-                case rErr:
-                    ctrbyte = 0x0a;
-                    ProRead = 0;
-                    bWrite = 0;
-                    rdctrbyte = 10;
-                    ProDis_DataIOSet(0);
-                    break;
+			case rFlow:
+				ctrbyte = 0x09;
+				ProRead = 0;
+				bWrite = 0;
+				rdctrbyte = 9;
+				ProDis_DataIOSet(0);
+				break;
 
-                default:
-                    break;
-            }
-        }
-    }
+			case rFlowH:
+				ctrbyte = 0x0c;
+				ProRead = 0;
+				bWrite = 0;
+				rdctrbyte = 0x0c;
+				ProDis_DataIOSet(0);
+				break;
+
+			case rDevID:
+				ctrbyte = 0x0b;
+				ProRead = 0;
+				bWrite = 0;
+				rdctrbyte = 0x0b;
+				ProDis_DataIOSet(0);
+				break;
+
+			case rErr:
+				ctrbyte = 0x0a;
+				ProRead = 0;
+				bWrite = 0;
+				rdctrbyte = 10;
+				ProDis_DataIOSet(0);
+				break;
+
+			default:
+				break;
+			}
+		}
+	}
 }
 
 //--------------------------------------------------------------------//
@@ -508,9 +534,9 @@ void Post_Set_SpeedFlag(INT8U set_flag, INT8U set_speed)
 	bSet_SpeedEn = (set_flag == 0) ? 0 : 1;
 
 	if (set_speed > 5)
-		{
-			set_speed = 5;
-		}
+	{
+		set_speed = 5;
+	}
 	SysInfoSet &= 0xf8;
 	SysInfoSet |= set_speed;
 }
@@ -557,7 +583,6 @@ void ProDis_TimerInit(void)
 	ESP_LOGI(TAG, "ProDis timer started (1ms)");
 }
 
-
 void ProDis_Task(void *pvParameters)
 {
 	// 优先级可以设置较高，栈视 ProDis_Run1ms 的复杂程度调整
@@ -585,23 +610,52 @@ void Temp_Task1ms(void *arg)
 // ----------------- 100ms 调用任务 -----------------
 void Temp_Task100ms(void *arg)
 {
-	while (1)
-	{
-		// 调用获取数据函数
-		Pro_Run100ms();
+    static TickType_t last_send_tick = 0;
+    const TickType_t send_interval = pdMS_TO_TICKS(100); // 100ms 周期
+    static bool queue_full_flag = false;
 
-		// 打印出水温度、流量、电源类型、电池电量、通信状态
-		ESP_LOGI(TAG, "Temperature: %d°C, Flow: %d, Power: %s, BatteryLV: %d, COMErr: %s",
-				 ReadTemp,
-				 Flow_CurVal,
-				 (Get_PwType == 0 ? "Battery" : "DC12V"),
-				 Get_BellLV,
-				 (bCOMErr ? "Error" : "OK"));
+    while (1)
+    {
+        Pro_Run100ms();
 
-		// 延时100ms
-		vTaskDelay(pdMS_TO_TICKS(100));
-	}
+        // 构造 BLE 数据包内容
+        ble_data_t tx_data;
+        int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf),
+                           "TEMP=%d, FLOW=%d, POWER=%s, BATLV=%d, COM=%s",
+                           ReadTemp,
+                           Flow_CurVal,
+                           (Get_PwType == 0 ? "Battery" : "DC12V"),
+                           Get_BellLV,
+                           (bCOMErr ? "Error" : "OK"));
+        tx_data.len = len;
+
+        // 日志打印
+        ESP_LOGI(TAG, "%s", tx_data.buf);
+
+        // 定时 + 队列检查
+        if ((xTaskGetTickCount() - last_send_tick) >= send_interval)
+        {
+            if (uxQueueSpacesAvailable(ble_tx_queue) > 0)
+            {
+                // 推入队列
+                xQueueSend(ble_tx_queue, &tx_data, 0);
+                last_send_tick = xTaskGetTickCount();
+                queue_full_flag = false; // 队列空出，清除警告状态
+            }
+            else
+            {
+                if (!queue_full_flag)
+                {
+                    ESP_LOGW(TAG, "BLE TX queue full, ProDis data dropped");
+                    queue_full_flag = true; // 只打印一次警告
+                }
+            }
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
 }
+
 
 void Temp_task(void)
 {
