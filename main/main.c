@@ -52,7 +52,7 @@ void mode_control_task(void *pvParameters)
             xEventGroupClearBits(event_ctrl_protocol, Mode3_BIT); // 手动清除事件位
             break;
         case Mode4_BIT:
-            ESP_LOGI(TAG, "Mode 3 activated");
+            ESP_LOGI(TAG, "Mode 4 activated");
             mode4();                                              // 调用模式4的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode4_BIT); // 手动清除事件位
             break;
