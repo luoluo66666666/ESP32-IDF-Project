@@ -46,4 +46,54 @@ menu "Example Configuration"
         help
             Password for EAP method.
 
+    #
+    # 👇 新增 UART/RS485 子菜单
+    #
+    menu "UART/RS485 Configuration"
+
+    config ECHO_UART_PORT_NUM
+        int "UART Port Number"
+        range 0 2
+        default 1
+        help
+            Select UART port for RS485 echo example (0, 1, or 2).
+
+    config ECHO_UART_TXD
+        int "UART TX Pin"
+        default 23
+        help
+            TX GPIO pin number for RS485 communication.
+
+    config ECHO_UART_RXD
+        int "UART RX Pin"
+        default 22
+        help
+            RX GPIO pin number for RS485 communication.
+
+    config ECHO_UART_RTS
+        int "UART RTS Pin"
+        default 18
+        help
+            RTS GPIO pin number (used for DE/~RE driver control).
+
+    config ECHO_UART_CTS
+        int "UART CTS Pin"
+        default -1
+        help
+            CTS GPIO pin number (not used in half-duplex mode).
+
+    config ECHO_UART_BAUD_RATE
+        int "UART Baud Rate"
+        default 115200
+        help
+            Baud rate for RS485 UART communication.
+
+    config ECHO_TASK_STACK_SIZE
+        int "Echo Task Stack Size"
+        default 4096
+        help
+            Stack size for RS485 echo task.
+
+    endmenu
+
 endmenu

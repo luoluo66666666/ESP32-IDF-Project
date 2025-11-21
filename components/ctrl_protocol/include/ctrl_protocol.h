@@ -8,17 +8,7 @@
 
 
 #include <stdbool.h>
-// void ctrl_protocol_init(void);
-// void ctrl_protocol(const char *input, char *output, int max_len);
 
-// int set_fault(void);
-// int clear_fault(void);
-// int get_fault(void);
-// int set_run(void);
-// int get_run(void);
-// int clear_run(void);
-// int get_mode(void);
-// int set_mode(int mode);
 
 // 定义事件组标志位(最多32位)
 #define Mode0_BIT BIT0
@@ -28,6 +18,10 @@
 #define Mode4_BIT BIT4
 #define Mode5_UPPER_BIT BIT5
 #define Mode5_LOWER_BIT BIT6
+#define Motor_RUN_BIT BIT7
+#define Motor_STOP_BIT BIT8
+#define Motor_GET_BIT BIT9
+#define Motor_Finsh_BIT BIT12
 
 #define RUN_BIT BIT10   // 运行状态标志位
 #define FAULT_BIT BIT11 // 故障状态标志位
@@ -41,6 +35,9 @@ int get_mode_status(void);
 int set_mode(int mode);
 int check_status(void);
 void ctrl_protocol(char *input,char *output,int maxlen );
+
+int motor_run(void);
+int motor_stop(void);
 
 
 

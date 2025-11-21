@@ -2,24 +2,32 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "mode_ctrl.h"
+#include "ctrl_protocol.h"
 #include <stdio.h>
 
 static const char *TAG = "MODE0";
 
+#define Motor_RUN_BIT BIT7
+#define Motor_STOP_BIT BIT8
+#define Motor_GET_BIT BIT9
+
 extern int do_pin[26];
 extern int di_pin[6];
+
+#define POLE_EVENT_BIT (1 << 0)
+extern EventGroupHandle_t event_motor_ctrl;
 
 /*******************************************************************************
 ****函数功能: MODE0
 ****作者名称: Luo
 ****创建日期: 2025-08-08 14:09:46
 ********************************************************************************/
-int mode0(void)
+void mode0_task(void *pvParameters)
 {
     int status = 0;
     int time_cnt = 0;
     int runtime = 0; /* 统计执行时长（秒） */
-    int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
+    // int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
     int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
 
     ESP_LOGI(TAG, "Entering mode 0");
@@ -31,10 +39,10 @@ int mode0(void)
     }
 
     /* 读取 DI，必要时可作暂停/急停等判断 */
-    for (size_t i = 0; i < sizeof(di_pin) / sizeof(di_pin[0]); ++i)
-    {
-        di_level[i] = get_di_pin(i);
-    }
+    // for (size_t i = 0; i < sizeof(di_pin) / sizeof(di_pin[0]); ++i)
+    // {
+    //     di_level[i] = get_di_pin(i);
+    // }
 
     /*------------------ 主循环 ------------------*/
     while (true)
@@ -71,7 +79,7 @@ int mode0(void)
             if (time_cnt == 0)
             {
                 TURN_ON(7);       /* 水泵 */
-                GROUP_ON(12, 21); /* 12‑21 号电磁阀 */
+                GROUP_ON(12, 19); /* 12‑19 号电磁阀 */
                 TURN_ON(8);       /* 第一路水阀 */
             }
             if (++time_cnt >= 5)
@@ -84,14 +92,15 @@ int mode0(void)
         case 1: /* 冲水 2（30 s）*/
             if (time_cnt == 0)
             {
-                TURN_ON(3);  /* 加热 */
-                TURN_ON(0);  /* 上下推杆 */
-                TURN_OFF(1); /* 左右推杆 */
+                TURN_ON(3); /* 加热 */
+                // 触发 Pole_motor_control_task 执行
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
+
             if (++time_cnt >= 30)
             {
+                // 停止 Pole_motor_control_task
+                motor_stop();
                 status = 2;
                 time_cnt = 0;
             }
@@ -102,9 +111,7 @@ int mode0(void)
             {
                 TURN_OFF(7);
                 TURN_OFF(3);
-                TURN_OFF(0);
-                TURN_OFF(1);
-                GROUP_OFF(12, 21);
+                GROUP_OFF(12, 19);
             }
             if (++time_cnt >= 10)
             {
@@ -120,13 +127,13 @@ int mode0(void)
                 TURN_ON(3);
                 TURN_ON(16);
                 TURN_ON(5);
-                TURN_ON(0);
-                TURN_OFF(1);
+                // 触发 Pole_motor_control_task 执行
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
+
             if (++time_cnt >= 5)
             {
+                motor_stop();
                 status = 4;
                 time_cnt = 0;
             }
@@ -139,8 +146,6 @@ int mode0(void)
                 TURN_OFF(3);
                 TURN_OFF(16);
                 TURN_OFF(5);
-                TURN_OFF(0);
-                TURN_OFF(1);
             }
             if (++time_cnt >= 10)
             {
@@ -154,26 +159,23 @@ int mode0(void)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 21);
-                TURN_ON(0);
-                TURN_OFF(1);
+                GROUP_ON(12, 19);
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
             if (++time_cnt >= 30)
             {
+                motor_stop();
                 status = 6;
                 time_cnt = 0;
             }
+            break;
 
         case 6: /* 暂停 7（10 s）*/
             if (time_cnt == 0)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                TURN_OFF(0);
-                TURN_OFF(1);
-                GROUP_OFF(12, 21);
+                GROUP_OFF(12, 19);
             }
             if (++time_cnt >= 10)
             {
@@ -189,13 +191,11 @@ int mode0(void)
                 TURN_ON(3);
                 TURN_ON(16);
                 TURN_ON(5);
-                TURN_ON(0);
-                TURN_OFF(1);
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
             if (++time_cnt >= 5)
             {
+                motor_stop();
                 status = 8;
                 time_cnt = 0;
             }
@@ -208,8 +208,6 @@ int mode0(void)
                 TURN_OFF(3);
                 TURN_OFF(16);
                 TURN_OFF(5);
-                TURN_OFF(0);
-                TURN_OFF(1);
             }
             if (++time_cnt >= 10)
             {
@@ -223,14 +221,12 @@ int mode0(void)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 21);
-                TURN_ON(0);
-                TURN_OFF(1);
+                GROUP_ON(12, 19);
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
             if (++time_cnt >= 30)
             {
+                motor_stop();
                 status = 10;
                 time_cnt = 0;
             }
@@ -241,9 +237,7 @@ int mode0(void)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                TURN_OFF(0);
-                TURN_OFF(1);
-                GROUP_OFF(12, 21);
+                GROUP_OFF(12, 19);
             }
             if (++time_cnt >= 10)
             {
@@ -259,13 +253,11 @@ int mode0(void)
                 TURN_ON(3);
                 TURN_ON(16);
                 TURN_ON(6);
-                TURN_ON(0);
-                TURN_OFF(1);
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
             if (++time_cnt >= 5)
             {
+                motor_stop();
                 status = 12;
                 time_cnt = 0;
             }
@@ -278,8 +270,6 @@ int mode0(void)
                 TURN_OFF(3);
                 TURN_OFF(16);
                 TURN_OFF(6);
-                TURN_OFF(0);
-                TURN_OFF(1);
             }
             if (++time_cnt >= 10)
             {
@@ -293,14 +283,12 @@ int mode0(void)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 21);
-                TURN_ON(0);
-                TURN_OFF(1);
+                GROUP_ON(12, 19);
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
             if (++time_cnt >= 30)
             {
+                motor_stop();
                 status = 14;
                 time_cnt = 0;
             }
@@ -311,9 +299,7 @@ int mode0(void)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                TURN_OFF(0);
-                TURN_OFF(1);
-                GROUP_OFF(12, 21);
+                GROUP_OFF(12, 19);
             }
             if (++time_cnt >= 10)
             {
@@ -329,13 +315,11 @@ int mode0(void)
                 TURN_ON(3);
                 TURN_ON(16);
                 TURN_ON(5);
-                TURN_ON(0);
-                TURN_OFF(1);
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
             if (++time_cnt >= 5)
             {
+                motor_stop();
                 status = 16;
                 time_cnt = 0;
             }
@@ -348,8 +332,6 @@ int mode0(void)
                 TURN_OFF(3);
                 TURN_OFF(16);
                 TURN_OFF(5);
-                TURN_OFF(0);
-                TURN_OFF(1);
             }
             if (++time_cnt >= 10)
             {
@@ -363,14 +345,12 @@ int mode0(void)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 21);
-                TURN_ON(0);
-                TURN_OFF(1);
+                GROUP_ON(12, 19);
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
             if (++time_cnt >= 40)
             {
+                motor_stop();
                 status = 18;
                 time_cnt = 0;
             }
@@ -381,9 +361,7 @@ int mode0(void)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                TURN_OFF(0);
-                TURN_OFF(1);
-                GROUP_OFF(12, 21);
+                GROUP_OFF(12, 19);
             }
             if (++time_cnt >= 10)
             {
@@ -399,19 +377,17 @@ int mode0(void)
                 TURN_ON(3);
                 TURN_ON(16);
                 TURN_ON(6);
-                TURN_ON(0);
-                TURN_OFF(1);
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
             if (++time_cnt >= 5)
             {
+                motor_stop();
                 status = 20;
                 time_cnt = 0;
             }
             break;
 
-        case 20: /* 暂停 21（10 s）*/
+        case 20: /* 暂停 19（10 s）*/
             if (time_cnt == 0)
             {
                 TURN_ON(11); /* 额外开启 pin11 */
@@ -419,8 +395,6 @@ int mode0(void)
                 TURN_OFF(3);
                 TURN_OFF(16);
                 TURN_OFF(6);
-                TURN_OFF(0);
-                TURN_OFF(1);
             }
             if (++time_cnt >= 10)
             {
@@ -434,27 +408,23 @@ int mode0(void)
             {
                 TURN_ON(7);
                 TURN_ON(3);
-                GROUP_ON(12, 21);
-                TURN_ON(0);
-                TURN_OFF(1);
+                GROUP_ON(12, 19);
+                motor_run();
             }
-            TOGGLE(0);
-            TOGGLE(1);
             if (++time_cnt >= 60)
             {
+                motor_stop();
                 status = 22;
                 time_cnt = 0;
             }
             break;
 
-        case 22: /* 暂停 23（10 s）*/
+        case 22: /* 暂停 （10 s）*/
             if (time_cnt == 0)
             {
                 TURN_OFF(7);
                 TURN_OFF(3);
-                TURN_OFF(0);
-                TURN_OFF(1);
-                GROUP_OFF(12, 21);
+                GROUP_OFF(12, 19);
             }
             if (++time_cnt >= 10)
             {
@@ -462,23 +432,33 @@ int mode0(void)
                 time_cnt = 0;
             }
             break;
-
         case 23: /*24 结束 / 复位 */
             ESP_LOGI(TAG, "mode 1 finished");
             for (size_t i = 0; i < 26; ++i)
+            {
                 TURN_OFF(i);
-            return 0;
+            }
+            ESP_LOGI(TAG, "Mode0 finished, deleting task");
+            vTaskDelete(NULL); // 删除自己
+            break;
 
         default:
             ESP_LOGE(TAG, "Unknown status %d", status);
-            return -1;
+            for (size_t i = 0; i < 26; ++i)
+            {
+                TURN_OFF(i);
+            }
+            vTaskDelete(NULL); // 退出任务
+            break;
         }
 
-        /*--------------------------------------------------*/
+        /*------------------------时间基准--------------------------*/
         runtime++;
         delay_1s(); /* 延时 1 秒 */
     }
+}
 
-    /* 不会到达这里 */
-    return 0;
+void start_mode0(void)
+{
+    xTaskCreate(mode0_task, "mode0_task", 4096, NULL, 5, NULL);
 }

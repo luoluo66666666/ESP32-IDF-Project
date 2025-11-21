@@ -7,8 +7,14 @@
 #include "gap.h"
 #include "ctrl_protocol.h"
 #include "mode_ctrl.h"
+#include <esp_log.h>
+#include "rs485_water_valve.h"
+
+
 
 static const char *TAG = "current MODE";
+
+extern void Pole_motor_control_task(void *p);
 
 EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 
@@ -26,7 +32,8 @@ void mode_control_task(void *pvParameters)
         {
         case Mode0_BIT:
             ESP_LOGI(TAG, "Mode 0 activated");
-            mode0();                                              // 调用模式0的控制函数
+            // start_mode0();
+            start_mode_test();                                    // 调用模式0的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode0_BIT); // 手动清除事件位
             break;
         case Mode1_BIT:
@@ -45,18 +52,18 @@ void mode_control_task(void *pvParameters)
             xEventGroupClearBits(event_ctrl_protocol, Mode3_BIT); // 手动清除事件位
             break;
         case Mode4_BIT:
-            ESP_LOGI(TAG, "Mode 3 activated");
+            ESP_LOGI(TAG, "Mode 4 activated");
             mode4();                                              // 调用模式4的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode4_BIT); // 手动清除事件位
             break;
         case Mode5_UPPER_BIT:
             ESP_LOGI(TAG, "Mode 5 Upper activated");
-            mode5_up(); // 调用模式5上半部分的控制函数
+            mode5_up();                                                 // 调用模式5上半部分的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode5_UPPER_BIT); // 手动清除事件位
             break;
         case Mode5_LOWER_BIT:
             ESP_LOGI(TAG, "Mode 5 Lower activated");
-            mode5_down();                                         // 调用模式5下半部分的控制函数
+            mode5_down();                                               // 调用模式5下半部分的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode5_LOWER_BIT); // 手动清除事件位
             break;
         default:
@@ -67,12 +74,18 @@ void mode_control_task(void *pvParameters)
 
 void app_main(void)
 {
-    pin_init();
+    // pin_init();
     ctrl_protocol_init(); // Initialize the control protocol
-    Wifi_task();          // 启动wifi模块
+    // Wifi_task();          // 启动wifi模块
 
     ble_task(); // 启动BLE任务
-
-    // 创建控制任务
+    // Temp_task();
+    // Temp_task();
+    // sensor_init();
+    // rs485_task();
+    // // 创建控制任务
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
+    // xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }
+
+
