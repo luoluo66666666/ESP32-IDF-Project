@@ -231,9 +231,16 @@ unsigned short temp_MB_CRC16(unsigned char *pucFrame, unsigned short usLen)
     return (unsigned short)((ucCRCHi << 8) | ucCRCLo); 
 }
 
+bool rs485_initialized = false;
 //==================== 初始化 RS485 ====================//
 void RS485_init(void)
 {
+    if (rs485_initialized)
+    {
+        ESP_LOGI(TAG, "RS485 already initialized");
+        return;
+    }
+
     uart_config_t cfg = {
         .baud_rate = 9600,
         .data_bits = UART_DATA_8_BITS,
@@ -262,6 +269,9 @@ void RS485_init(void)
     gpio_set_level(UART_RE_GPIO, 0);
 
     ESP_LOGI(TAG, "RS485 UART initialized with DE=%d RE=%d", UART_DE_GPIO, UART_RE_GPIO);
+
+    rs485_initialized = true;
+
 }
 
 //==================== 发送报文 ====================//
@@ -398,12 +408,12 @@ void temp_test_sequence(void)
     uint8_t addr = 1;
 
     // 1️⃣ 0x0000 寄存器写入 0x00C0 —— 开机 + 温度标志
-    temp_rs485_write_register(addr, 0x0000, 0x00C0);
-    vTaskDelay(pdMS_TO_TICKS(200));
+    // temp_rs485_write_register(addr, 0x0000, 0x00C0);
+    // vTaskDelay(pdMS_TO_TICKS(200));
 
-    // 2️⃣ 0x0001 寄存器写入 0x0023 —— 设置温度 35℃
-    temp_rs485_write_register(addr, 0x0001, 0x0030);
-    vTaskDelay(pdMS_TO_TICKS(200));
+    // // 2️⃣ 0x0001 寄存器写入 0x0023 —— 设置温度 35℃
+    // temp_rs485_write_register(addr, 0x0001, 0x0025);
+    // vTaskDelay(pdMS_TO_TICKS(200));
 
     // 3️⃣ 读取 0x0000 起始的 2 个寄存器（系统信息 + 当前温度）
     temp_rs485_read_register(addr, 0x0000, 2);

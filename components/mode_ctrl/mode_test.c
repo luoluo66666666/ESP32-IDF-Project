@@ -50,7 +50,7 @@ void test_task(void *pvParameters)
 
         ESP_LOGI(TAG, "status:%d time_cnt:%d", status, time_cnt);
 
-        /* 暂停键，放在这里检测 (await_pause_and_restore) */
+        /* 暂停键，放在这里检测 (await_ pause_and_restore) */
         if (get_di_pin(2) == 1) // 假设 DI1 是暂停键
         {
             vTaskDelay(pdMS_TO_TICKS(50)); // 简单防抖50ms

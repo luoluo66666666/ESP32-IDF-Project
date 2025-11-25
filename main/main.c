@@ -65,7 +65,7 @@ void mode_control_task(void *pvParameters)
             ESP_LOGI(TAG, "Mode 5 Lower activated");
             mode5_down();                                               // 调用模式5下半部分的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode5_LOWER_BIT); // 手动清除事件位
-            break;
+            break; 
         default:
             break;
         }
