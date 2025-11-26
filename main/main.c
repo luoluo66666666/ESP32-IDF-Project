@@ -74,7 +74,7 @@ void mode_control_task(void *pvParameters)
 
 void app_main(void)
 {
-    // pin_init();
+    pin_init();
     ctrl_protocol_init(); // Initialize the control protocol
     // Wifi_task();          // 启动wifi模块
 
@@ -82,7 +82,7 @@ void app_main(void)
     // Temp_task();
     // Temp_task();
     // sensor_init();
-    // rs485_task();
+    // temp_rs485_task();
     // // 创建控制任务
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     // xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);

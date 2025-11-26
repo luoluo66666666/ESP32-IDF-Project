@@ -38,7 +38,6 @@
         "sdkconfig.h": "c",
         "queue.h": "c",
         "bitset": "c",
-
         "semphr.h": "c",
         "event_groups.h": "c",
         "stdbool.h": "c",
@@ -51,7 +50,13 @@
         "regex": "c",
         "tuple": "c",
         "utility": "c",
-        "rs485_water_valve.h": "c"
+        "rs485_water_valve.h": "c",
+        "deque": "c",
+        "list": "c",
+        "unordered_map": "c",
+        "vector": "c",
+        "initializer_list": "c",
+        "text_encoding": "c"
     },
     "idf.flashType": "UART",
     "idf.portWin": "COM14"

@@ -13,10 +13,12 @@
 #define ECHO_UART_PORT (CONFIG_ECHO_UART_PORT_NUM)
 #define ECHO_TEST_TXD (CONFIG_ECHO_UART_TXD)
 #define ECHO_TEST_RXD (CONFIG_ECHO_UART_RXD)
-// #define ECHO_TEST_RTS (CONFIG_ECHO_UART_RTS)
-// #define ECHO_TEST_CTS (UART_PIN_NO_CHANGE)
-#define UART_DE_GPIO   16   // DE 控制
-#define UART_RE_GPIO   8   // RE 控制，低有效
+#define ECHO_TEST_RTS (CONFIG_ECHO_UART_RTS)
+#define ECHO_TEST_CTS (UART_PIN_NO_CHANGE)
+// Timeout threshold for UART = number of symbols (~10 tics) with unchanged state on receive pin
+#define ECHO_READ_TOUT (3) // 3.5T * 8 = 28 ticks, TOUT=3 -> ~24..33 ticks
+#define UART_DE_GPIO 16    // DE 控制
+#define UART_RE_GPIO 8     // RE 控制，低有效
 
 extern QueueHandle_t ble_tx_queue;
 
@@ -214,21 +216,21 @@ static const unsigned char aucCRCLo[] = {
     0x44, 0x84, 0x85, 0x45, 0x87, 0x47, 0x46, 0x86, 0x82, 0x42, 0x43, 0x83,
     0x41, 0x81, 0x80, 0x40};
 
-unsigned short temp_MB_CRC16(unsigned char *pucFrame, unsigned short usLen) 
-{ 
-    unsigned char ucCRCHi = 0xFF; 
-    unsigned char ucCRCLo = 0xFF; 
-    unsigned short iIndex; 
+unsigned short temp_MB_CRC16(unsigned char *pucFrame, unsigned short usLen)
+{
+    unsigned char ucCRCHi = 0xFF;
+    unsigned char ucCRCLo = 0xFF;
+    unsigned short iIndex;
 
-    while(usLen--) 
-    { 
-        iIndex = ucCRCLo ^ *(pucFrame++); 
-        ucCRCLo = (unsigned char)(ucCRCHi ^ aucCRCHi[iIndex]); 
-        ucCRCHi = aucCRCLo[iIndex]; 
-    } 
+    while (usLen--)
+    {
+        iIndex = ucCRCLo ^ *(pucFrame++);
+        ucCRCLo = (unsigned char)(ucCRCHi ^ aucCRCHi[iIndex]);
+        ucCRCHi = aucCRCLo[iIndex];
+    }
 
     // 返回 CRC16 高低字节组合
-    return (unsigned short)((ucCRCHi << 8) | ucCRCLo); 
+    return (unsigned short)((ucCRCHi << 8) | ucCRCLo);
 }
 
 bool rs485_initialized = false;
@@ -240,38 +242,44 @@ void RS485_init(void)
         ESP_LOGI(TAG, "RS485 already initialized");
         return;
     }
-
+    const int uart_num = ECHO_UART_PORT;
     uart_config_t cfg = {
         .baud_rate = 9600,
         .data_bits = UART_DATA_8_BITS,
-        .parity    = UART_PARITY_DISABLE,
+        .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
         .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_DEFAULT
-    };
+        .source_clk = UART_SCLK_DEFAULT};
 
     ESP_ERROR_CHECK(uart_driver_install(ECHO_UART_PORT, BUF_SIZE * 2, 0, 0, NULL, 0));
     ESP_ERROR_CHECK(uart_param_config(ECHO_UART_PORT, &cfg));
-    ESP_ERROR_CHECK(uart_set_pin(ECHO_UART_PORT, ECHO_TEST_TXD, ECHO_TEST_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    // ESP_ERROR_CHECK(uart_set_pin(ECHO_UART_PORT, ECHO_TEST_TXD, ECHO_TEST_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE));
+    // Set UART pins as per KConfig settings
+    ESP_ERROR_CHECK(uart_set_pin(ECHO_UART_PORT, ECHO_TEST_TXD, ECHO_TEST_RXD, ECHO_TEST_RTS, ECHO_TEST_CTS));
 
-    // 配置 DE/RE GPIO
-    gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_DISABLE,
-        .mode = GPIO_MODE_OUTPUT,
-        .pin_bit_mask = ((1ULL << UART_DE_GPIO) | (1ULL << UART_RE_GPIO)),
-        .pull_down_en = 0,
-        .pull_up_en = 0
-    };
-    gpio_config(&io_conf);
+    // Set RS485 half duplex mode
+    ESP_ERROR_CHECK(uart_set_mode(uart_num, UART_MODE_RS485_HALF_DUPLEX));
 
-    // 初始为接收模式
-    gpio_set_level(UART_DE_GPIO, 0);
-    gpio_set_level(UART_RE_GPIO, 0);
+    // Set read timeout of UART TOUT feature
+    ESP_ERROR_CHECK(uart_set_rx_timeout(uart_num, ECHO_READ_TOUT));
 
-    ESP_LOGI(TAG, "RS485 UART initialized with DE=%d RE=%d", UART_DE_GPIO, UART_RE_GPIO);
+    // // 配置 DE/RE GPIO
+    // gpio_config_t io_conf = {
+    //     .intr_type = GPIO_INTR_DISABLE,
+    //     .mode = GPIO_MODE_OUTPUT,
+    //     .pin_bit_mask = ((1ULL << UART_DE_GPIO) | (1ULL << UART_RE_GPIO)),
+    //     .pull_down_en = 0,
+    //     .pull_up_en = 0
+    // };
+    // gpio_config(&io_conf);
+
+    // // 初始为接收模式
+    // gpio_set_level(UART_DE_GPIO, 0);
+    // gpio_set_level(UART_RE_GPIO, 0);
+
+    // ESP_LOGI(TAG, "RS485 UART initialized with DE=%d RE=%d", UART_DE_GPIO, UART_RE_GPIO);
 
     rs485_initialized = true;
-
 }
 
 //==================== 发送报文 ====================//
@@ -401,8 +409,6 @@ void temp_valve_read_flow(uint8_t addr)
     temp_rs485_read_register(addr, 0x0003, 1);
 }
 
-
-
 void temp_test_sequence(void)
 {
     uint8_t addr = 1;
@@ -430,36 +436,24 @@ void temp_test_sequence(void)
     ESP_LOGI(TAG, "Test sequence finished");
 }
 
-
-
 //==================== 周期任务 ====================//
 void temp_valve_poll_task(void *arg)
 {
     uint8_t addr = 1;
 
-    // temp_valve_power_on(addr, 3);
-    // temp_valve_set_temperature(addr, 40);
+    temp_rs485_write_register(addr, 0x0000, 0x00C0);
+    vTaskDelay(pdMS_TO_TICKS(200));
 
+    temp_rs485_write_register(addr, 0x0001, 0x0028);
+    vTaskDelay(pdMS_TO_TICKS(200));
     while (1)
     {
-        // ESP_LOGI(TAG, "------ Polling Valve ------");
-        // temp_rs485_read_register(addr, 0x0001, 3);
-        // // temp_rs485_read_register(addr, 0x0000, 1); // 状态寄存器
-        // // vTaskDelay(pdMS_TO_TICKS(200));
-
-        // // temp_valve_read_water_temp(addr);
-        // vTaskDelay(pdMS_TO_TICKS(200));
-
-        // temp_valve_read_flow(addr);
-        temp_test_sequence();
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        temp_rs485_read_register(addr, 0x0001, 4);
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
-
-
-
-void rs485_task(void)
+void temp_rs485_task(void)
 {
     RS485_init();
     xTaskCreate(temp_valve_poll_task, "temp_valve_poll_task", 4096, NULL, 10, NULL);
