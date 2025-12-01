@@ -62,8 +62,8 @@ void Pole_motor_control_task(void *p)
             TURN_ON(21);
             pole2_state = POLE_RETRACTED;
             vTaskDelay(pdMS_TO_TICKS(5000)); // 给收杆动作预留时间
-            TURN_OFF(1);
             TURN_OFF(21);
+            TURN_OFF(1);
 
             xEventGroupClearBits(event_motor_ctrl, Motor_Finsh_BIT | Motor_RUN_BIT | Motor_STOP_BIT);
             ESP_LOGI(TAG, "Motor FINISH detected, all retracted");

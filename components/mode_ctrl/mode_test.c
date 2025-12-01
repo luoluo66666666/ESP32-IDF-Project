@@ -80,9 +80,10 @@ void test_task(void *pvParameters)
         case 0: /* 冷水 1（5 s）*/
             if (time_cnt == 0)
             {
-                TURN_ON(7);       /* 清水阀 */
-                GROUP_ON(12, 19); /* 12‑19 号电磁阀 */
-                TURN_ON(8);       /* 第一路水阀 */
+                TURN_ON(7); /* 清水阀 */
+                TURN_ON(16);
+                TURN_ON(17); /* 12‑19 号电磁阀 */
+                TURN_ON(8);  /* 第一路水阀 */
             }
             if (++time_cnt >= 5)
             {
@@ -113,7 +114,8 @@ void test_task(void *pvParameters)
             {
                 TURN_OFF(7);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -128,7 +130,7 @@ void test_task(void *pvParameters)
                 TURN_ON(7);
                 TURN_ON(3);
                 TURN_ON(16);
-                TURN_ON(18);
+                TURN_ON(17);
                 TURN_ON(5);
                 // 触发 Pole_motor_control_task 执行
                 motor_run();
@@ -148,7 +150,7 @@ void test_task(void *pvParameters)
                 TURN_OFF(7);
                 TURN_OFF(3);
                 TURN_OFF(16);
-                TURN_OFF(18);
+                TURN_OFF(17);
                 TURN_OFF(5);
             }
             if (++time_cnt >= 10)
@@ -163,7 +165,8 @@ void test_task(void *pvParameters)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -179,7 +182,8 @@ void test_task(void *pvParameters)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -194,7 +198,7 @@ void test_task(void *pvParameters)
                 TURN_ON(7);
                 TURN_ON(3);
                 TURN_ON(16);
-                TURN_ON(18);
+                TURN_ON(17);
                 TURN_ON(5);
                 motor_run();
             }
@@ -212,7 +216,7 @@ void test_task(void *pvParameters)
                 TURN_OFF(7);
                 TURN_OFF(3);
                 TURN_OFF(16);
-                TURN_OFF(18);
+                TURN_OFF(17);
                 TURN_OFF(5);
             }
             if (++time_cnt >= 10)
@@ -227,7 +231,8 @@ void test_task(void *pvParameters)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -243,7 +248,8 @@ void test_task(void *pvParameters)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -258,7 +264,7 @@ void test_task(void *pvParameters)
                 TURN_ON(7);
                 TURN_ON(3);
                 TURN_ON(16);
-                TURN_ON(18);
+                TURN_ON(17);
                 TURN_ON(6);
                 motor_run();
             }
@@ -276,7 +282,7 @@ void test_task(void *pvParameters)
                 TURN_OFF(7);
                 TURN_OFF(3);
                 TURN_OFF(16);
-                TURN_OFF(18);
+                TURN_OFF(17);
                 TURN_OFF(6);
             }
             if (++time_cnt >= 10)
@@ -363,9 +369,10 @@ void sixmin_test_task(void *pvParameters)
         case 0: /* 冷水 1（5 s）*/
             if (time_cnt == 0)
             {
-                TURN_ON(7);       /* 清水阀 */
-                TURN_ON(8);       /* 放水阀 */
-                GROUP_ON(12, 19); /* 12‑19 号电磁出水阀 */
+                TURN_ON(7); /* 清水阀 */
+                TURN_ON(8); /* 放水阀 */
+                TURN_ON(16);
+                TURN_ON(17); /* 12‑19 号电磁出水阀 */
             }
             if (++time_cnt >= 5)
             {
@@ -397,7 +404,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_OFF(7);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -413,7 +421,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_ON(3);
                 TURN_ON(5);
                 TURN_ON(16);
-                TURN_ON(18);
+                TURN_ON(17);
                 // 触发 Pole_motor_control_task 执行
                 motor_run();
             }
@@ -432,7 +440,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(16);
-                TURN_OFF(18);
+                TURN_OFF(17);
                 TURN_OFF(5);
             }
             if (++time_cnt >= 10)
@@ -447,7 +455,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -463,7 +472,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -479,7 +489,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_ON(3);
                 TURN_ON(5);
                 TURN_ON(16);
-                TURN_ON(18);
+                TURN_ON(17);
 
                 motor_run();
             }
@@ -498,7 +508,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_OFF(3);
                 TURN_OFF(5);
                 TURN_OFF(16);
-                TURN_OFF(18);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -512,7 +522,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -528,7 +539,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -544,7 +556,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_ON(3);
                 TURN_ON(6);
                 TURN_ON(16);
-                TURN_ON(18);
+                TURN_ON(17);
 
                 motor_run();
             }
@@ -563,7 +575,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_OFF(3);
                 TURN_OFF(6);
                 TURN_OFF(16);
-                TURN_OFF(18);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -577,7 +589,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -593,7 +606,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -609,7 +623,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_ON(3);
                 TURN_ON(5);
                 TURN_ON(16);
-                TURN_ON(18);
+                TURN_ON(17);
 
                 motor_run();
             }
@@ -628,7 +642,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_OFF(3);
                 TURN_OFF(5);
                 TURN_OFF(16);
-                TURN_OFF(18);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -642,7 +656,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
 
                 motor_run();
             }
@@ -661,7 +676,9 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
+        
             }
             if (++time_cnt >= 10)
             {
@@ -677,7 +694,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_ON(3);
                 TURN_ON(22);
                 TURN_ON(16);
-                TURN_ON(18);
+                TURN_ON(17);
 
                 motor_run();
             }
@@ -696,7 +713,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_OFF(3);
                 TURN_OFF(22);
                 TURN_OFF(16);
-                TURN_OFF(18);
+                TURN_OFF(17);
 
                 TURN_ON(11); // 打开直排
             }
@@ -712,7 +729,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -728,7 +746,8 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
 
                 TURN_OFF(11); // 关闭直排
                 TURN_OFF(25);

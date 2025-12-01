@@ -456,5 +456,5 @@ void temp_valve_poll_task(void *arg)
 void temp_rs485_task(void)
 {
     RS485_init();
-    xTaskCreate(temp_valve_poll_task, "temp_valve_poll_task", 4096, NULL, 10, NULL);
+    xTaskCreate(temp_valve_poll_task, "temp_valve_poll_task", 4096, NULL, 8, NULL);
 }
