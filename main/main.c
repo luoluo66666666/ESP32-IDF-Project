@@ -85,7 +85,7 @@ void app_main(void)
     // temp_rs485_task();   //恒温宝心跳包
     // // 创建控制任务
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
-    // xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
+    xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }
 
 
