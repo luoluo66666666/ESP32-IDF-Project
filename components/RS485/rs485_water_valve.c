@@ -444,7 +444,7 @@ void temp_valve_poll_task(void *arg)
     temp_rs485_write_register(addr, 0x0000, 0x00C0);
     vTaskDelay(pdMS_TO_TICKS(200));
 
-    temp_rs485_write_register(addr, 0x0001, 0x0028);
+    temp_rs485_write_register(addr, 0x0001, 0x0024);
     vTaskDelay(pdMS_TO_TICKS(200));
     while (1)
     {
