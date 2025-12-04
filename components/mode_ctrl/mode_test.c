@@ -619,7 +619,7 @@ void sixmin_test_task(void *pvParameters)
 
                 motor_run();
             }
-            if (++time_cnt >= 5)
+            if (++time_cnt >= 3)
             {
                 motor_stop();
                 status = 12;
@@ -781,7 +781,7 @@ void sixmin_test_task(void *pvParameters)
 
                 motor_run();
             }
-            if (++time_cnt >= 5)
+            if (++time_cnt >= 3)
             {
                 motor_stop();
                 status = 20;
@@ -798,8 +798,6 @@ void sixmin_test_task(void *pvParameters)
                 TURN_OFF(16);
                 TURN_OFF(17);
 
-                // TURN_ON(11);
-                // TURN_ON(25);
             }
             if (++time_cnt >= 5)
             {
@@ -808,10 +806,10 @@ void sixmin_test_task(void *pvParameters)
             }
             break;
 
-        case 21: /* 冲水 22（125 s）*/
+        case 21: /* 冲水 22（240 s）*/
             if (time_cnt == 0)
             {
-                // TURN_ON(11);
+                TURN_ON(11);
                 // TURN_OFF(25);
 
                 TURN_ON(9);
@@ -820,7 +818,7 @@ void sixmin_test_task(void *pvParameters)
                 TURN_ON(17);
                 motor_run();
             }
-            if (++time_cnt >= 125)
+            if (++time_cnt >= 480)
             {
                 motor_stop();
                 status = 22;
@@ -854,9 +852,9 @@ void sixmin_test_task(void *pvParameters)
                 TURN_OFF(i);
             }
             gpio_set_level(GPIO_NUM_19, 0);
-            TURN_ON(11);
-            vTaskDelay(pdMS_TO_TICKS(120));
-            TURN_OFF(11);
+            // TURN_ON(11);
+            // vTaskDelay(pdMS_TO_TICKS(120));
+            // TURN_OFF(11);
             ESP_LOGI(TAG, "Mode0 finished, deleting task");
             // 设置电机任务的 FINISH_BIT，电机任务收到后自动收杆
             xEventGroupSetBits(event_motor_ctrl, Motor_Finsh_BIT);

@@ -10,8 +10,6 @@
 #include <esp_log.h>
 #include "rs485_water_valve.h"
 
-
-
 static const char *TAG = "current MODE";
 
 extern void Pole_motor_control_task(void *p);
@@ -23,6 +21,12 @@ void mode_control_task(void *pvParameters)
     EventBits_t bits;
     while (1)
     {
+        /* -----------检测 11 是否被关闭----------- */
+        if (gpio_get_level(GPIO_NUM_45) == 0) // 若 TURN_OFF(11) 被调用
+        {
+            ESP_LOGW(TAG, "Warning: TURN 11 was OFF, restoring it.");
+            TURN_ON(11);
+        }
         bits = xEventGroupWaitBits(event_ctrl_protocol,
                                    Mode0_BIT | Mode1_BIT | Mode2_BIT | Mode3_BIT | Mode4_BIT | Mode5_UPPER_BIT | Mode5_LOWER_BIT,
                                    pdFALSE,        // 清除事件组标志位
@@ -65,7 +69,7 @@ void mode_control_task(void *pvParameters)
             ESP_LOGI(TAG, "Mode 5 Lower activated");
             mode5_down();                                               // 调用模式5下半部分的控制函数
             xEventGroupClearBits(event_ctrl_protocol, Mode5_LOWER_BIT); // 手动清除事件位
-            break; 
+            break;
         default:
             break;
         }
@@ -87,5 +91,3 @@ void app_main(void)
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }
-
-
