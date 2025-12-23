@@ -31,7 +31,7 @@
 #include "nimble/nimble_port_freertos.h"
 
 /* Defines */
-#define TAG "Test_BLE"
-#define DEVICE_NAME "Test_BLE"
+#define TAG "LL-Test"
+#define DEVICE_NAME "LL-Test"
 
 #endif // COMMON_H

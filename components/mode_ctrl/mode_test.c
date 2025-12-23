@@ -19,6 +19,19 @@ extern uint8_t cur_di;
 #define POLE_EVENT_BIT (1 << 0)
 extern EventGroupHandle_t event_motor_ctrl;
 
+esp_err_t led_init(void)
+{
+    esp_err_t ret = ESP_OK;
+
+    // DO 初始化{
+    esp_rom_gpio_pad_select_gpio(GPIO_NUM_19);
+    ESP_ERROR_CHECK(gpio_reset_pin(GPIO_NUM_19));
+    ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_19, GPIO_MODE_OUTPUT));
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_19, 0));
+
+    return ret;
+}
+
 /*******************************************************************************
 ****函数功能: MODE0
 ****作者名称: Luo
@@ -31,7 +44,7 @@ void test_task(void *pvParameters)
     int runtime = 0; /* 统计执行时长（秒） */
     // int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
     int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
-
+    led_init();
     ESP_LOGI(TAG, "Entering mode 0");
 
     /* 初始化所有 DO */
@@ -45,6 +58,7 @@ void test_task(void *pvParameters)
     // {
     //     di_level[i] = get_di_pin(i);
     // }
+    gpio_set_level(GPIO_NUM_19, 1);
 
     /*------------------ 主循环 ------------------*/
     while (true)
@@ -73,6 +87,7 @@ void test_task(void *pvParameters)
             }
             ESP_LOGI(TAG, "Resumed");
         }
+        TURN_ON(11);
 
         /*------------------ 状态机 ------------------*/
         switch (status)
@@ -80,7 +95,8 @@ void test_task(void *pvParameters)
         case 0: /* 冷水 1（5 s）*/
             if (time_cnt == 0)
             {
-                TURN_ON(7);       /* 清水阀 */
+                TURN_ON(7); /* 清水阀 */
+                // TURN_ON(16);
                 GROUP_ON(12, 19); /* 12‑19 号电磁阀 */
                 TURN_ON(8);       /* 第一路水阀 */
             }
@@ -113,6 +129,7 @@ void test_task(void *pvParameters)
             {
                 TURN_OFF(7);
                 TURN_OFF(3);
+                TURN_OFF(16);
                 GROUP_OFF(12, 19);
             }
             if (++time_cnt >= 10)
@@ -126,9 +143,9 @@ void test_task(void *pvParameters)
             if (time_cnt == 0)
             {
                 TURN_ON(7);
-                TURN_ON(3);
                 TURN_ON(16);
                 TURN_ON(17);
+                TURN_ON(3);
                 TURN_ON(5);
                 // 触发 Pole_motor_control_task 执行
                 motor_run();
@@ -145,11 +162,14 @@ void test_task(void *pvParameters)
         case 4: /* 暂停 5（10 s）*/
             if (time_cnt == 0)
             {
+
                 TURN_OFF(7);
                 TURN_OFF(3);
                 TURN_OFF(16);
                 TURN_OFF(17);
                 TURN_OFF(5);
+
+                // TURN_ON(11);
             }
             if (++time_cnt >= 10)
             {
@@ -163,7 +183,10 @@ void test_task(void *pvParameters)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
+
+                // TURN_OFF(11);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -178,8 +201,9 @@ void test_task(void *pvParameters)
             if (time_cnt == 0)
             {
                 TURN_OFF(9);
-                TURN_OFF(3); 
-                GROUP_OFF(12, 19);
+                TURN_OFF(3);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -227,7 +251,8 @@ void test_task(void *pvParameters)
             {
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -243,7 +268,10 @@ void test_task(void *pvParameters)
             {
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
+
+                // TURN_ON(11);
             }
             if (++time_cnt >= 10)
             {
@@ -261,6 +289,8 @@ void test_task(void *pvParameters)
                 TURN_ON(17);
                 TURN_ON(6);
                 motor_run();
+
+                // TURN_OFF(11);
             }
             if (++time_cnt >= 5)
             {
@@ -278,8 +308,10 @@ void test_task(void *pvParameters)
                 TURN_OFF(16);
                 TURN_OFF(17);
                 TURN_OFF(6);
+
+                // TURN_ON(11);
             }
-            if (++time_cnt >= 10)
+            if (++time_cnt >= 30)
             {
                 status = 13;
                 time_cnt = 0;
@@ -333,8 +365,9 @@ void sixmin_test_task(void *pvParameters)
     int status = 0;
     int time_cnt = 0;
     int runtime = 0; /* 统计执行时长（秒） */
-    int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
-    int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
+    led_init();
+    // int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
+    // int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
     cur_di = input_state_change_handler();
 
     if (check_cross_loop_lock())
@@ -349,6 +382,8 @@ void sixmin_test_task(void *pvParameters)
     {
         TURN_OFF(i);
     }
+    gpio_set_level(GPIO_NUM_19, 1);
+    TURN_ON(11);
 
     /*------------------ 主循环 ------------------*/
     while (1)
@@ -377,8 +412,12 @@ void sixmin_test_task(void *pvParameters)
         case 1: /* 冲水 2（30 s）*/
             if (time_cnt == 0)
             {
+                // TURN_ON(11);
+                GROUP_OFF(12, 19);
                 TURN_OFF(8); /* 关放水阀 */
                 TURN_ON(3);  /* 开高压泵 */
+                TURN_ON(16);
+                TURN_ON(17);
                 // 触发 Pole_motor_control_task 执行
                 motor_run();
             }
@@ -395,9 +434,13 @@ void sixmin_test_task(void *pvParameters)
         case 2: /* 暂停 3（10 s）*/
             if (time_cnt == 0)
             {
-                TURN_OFF(7);
+                // TURN_OFF(7);
+                // TURN_OFF(11);
                 TURN_OFF(3);
-                GROUP_OFF(12, 15);
+                TURN_OFF(16);
+                TURN_OFF(17);
+
+                // TURN_ON(11);
             }
             if (++time_cnt >= 10)
             {
@@ -409,6 +452,7 @@ void sixmin_test_task(void *pvParameters)
         case 3: /* 洗发水 4（5 s）*/
             if (time_cnt == 0)
             {
+                // TURN_ON(11);
                 TURN_ON(9);
                 TURN_ON(3);
                 TURN_ON(5);
@@ -429,6 +473,8 @@ void sixmin_test_task(void *pvParameters)
         case 4: /* 暂停 5（10 s）*/
             if (time_cnt == 0)
             {
+                // TURN_ON(11);
+                // TURN_ON(25);
                 TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(16);
@@ -445,9 +491,12 @@ void sixmin_test_task(void *pvParameters)
         case 5: /* 冲水 6（30 s）*/
             if (time_cnt == 0)
             {
+                // TURN_ON(11);
+                // TURN_OFF(25);
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -461,9 +510,14 @@ void sixmin_test_task(void *pvParameters)
         case 6: /* 暂停 7（10 s）*/
             if (time_cnt == 0)
             {
+                // TURN_OFF(11);
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
+
+                // TURN_ON(11);
+                // TURN_ON(25);
             }
             if (++time_cnt >= 10)
             {
@@ -475,6 +529,9 @@ void sixmin_test_task(void *pvParameters)
         case 7: /* 洗发水 8（5 s）*/
             if (time_cnt == 0)
             {
+                // TURN_OFF(11);
+                // TURN_OFF(25);
+
                 TURN_ON(9);
                 TURN_ON(3);
                 TURN_ON(5);
@@ -494,6 +551,9 @@ void sixmin_test_task(void *pvParameters)
         case 8: /* 暂停 9（10 s）*/
             if (time_cnt == 0)
             {
+                // TURN_ON(11);
+                // TURN_ON(25);
+
                 TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(5);
@@ -510,9 +570,13 @@ void sixmin_test_task(void *pvParameters)
         case 9: /* 冲水 10（30 s）*/
             if (time_cnt == 0)
             {
+                // TURN_ON(11);
+                // TURN_OFF(25);
+
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -526,9 +590,13 @@ void sixmin_test_task(void *pvParameters)
         case 10: /* 暂停 11（10 s）*/
             if (time_cnt == 0)
             {
+                // TURN_OFF(11);
+                // TURN_ON(25);
+
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -540,6 +608,9 @@ void sixmin_test_task(void *pvParameters)
         case 11: /* 护发素 12（5 s）*/
             if (time_cnt == 0)
             {
+                // TURN_OFF(11);
+                // TURN_OFF(25);
+
                 TURN_ON(9);
                 TURN_ON(3);
                 TURN_ON(6);
@@ -548,7 +619,7 @@ void sixmin_test_task(void *pvParameters)
 
                 motor_run();
             }
-            if (++time_cnt >= 5)
+            if (++time_cnt >= 3)
             {
                 motor_stop();
                 status = 12;
@@ -559,6 +630,9 @@ void sixmin_test_task(void *pvParameters)
         case 12: /* 暂停 13（10 s）*/
             if (time_cnt == 0)
             {
+                // TURN_ON(11);
+                // TURN_ON(25);
+
                 TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(6);
@@ -575,9 +649,13 @@ void sixmin_test_task(void *pvParameters)
         case 13: /* 冲水 14（30 s）*/
             if (time_cnt == 0)
             {
+                // TURN_ON(11);
+                // TURN_OFF(25);
+
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
             if (++time_cnt >= 30)
@@ -591,9 +669,15 @@ void sixmin_test_task(void *pvParameters)
         case 14: /* 暂停 15（10 s）*/
             if (time_cnt == 0)
             {
+                // TURN_OFF(11);
+                // TURN_ON(25);
+
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
+
+                // TURN_ON(11);
             }
             if (++time_cnt >= 10)
             {
@@ -605,6 +689,9 @@ void sixmin_test_task(void *pvParameters)
         case 15: /* 洗发水 16（5 s）*/
             if (time_cnt == 0)
             {
+                // TURN_OFF(11);
+                // TURN_OFF(25);
+
                 TURN_ON(9);
                 TURN_ON(3);
                 TURN_ON(5);
@@ -624,6 +711,9 @@ void sixmin_test_task(void *pvParameters)
         case 16: /* 暂停 17（10 s）*/
             if (time_cnt == 0)
             {
+                // TURN_ON(11);
+                // TURN_ON(25);
+
                 TURN_OFF(9);
                 TURN_OFF(3);
                 TURN_OFF(5);
@@ -640,9 +730,14 @@ void sixmin_test_task(void *pvParameters)
         case 17: /* 冲水 18（40 s）*/
             if (time_cnt == 0)
             {
+                // TURN_OFF(11);
+                // TURN_ON(11);
+                // TURN_OFF(25);
+
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
 
                 motor_run();
             }
@@ -659,9 +754,13 @@ void sixmin_test_task(void *pvParameters)
         case 18: /* 暂停 19（10 s）*/
             if (time_cnt == 0)
             {
+                // TURN_OFF(11);
+                // TURN_ON(25);
+
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
             }
             if (++time_cnt >= 10)
             {
@@ -673,7 +772,8 @@ void sixmin_test_task(void *pvParameters)
         case 19: /* 中药 20（5 s）*/
             if (time_cnt == 0)
             {
-                TURN_ON(9);
+                // TURN_OFF(25);
+                TURN_ON(5);
                 TURN_ON(3);
                 TURN_ON(22);
                 TURN_ON(16);
@@ -681,7 +781,7 @@ void sixmin_test_task(void *pvParameters)
 
                 motor_run();
             }
-            if (++time_cnt >= 5)
+            if (++time_cnt >= 3)
             {
                 motor_stop();
                 status = 20;
@@ -698,24 +798,27 @@ void sixmin_test_task(void *pvParameters)
                 TURN_OFF(16);
                 TURN_OFF(17);
 
-                TURN_ON(11); // 打开直排
             }
-            if (++time_cnt >= 10)
+            if (++time_cnt >= 5)
             {
                 status = 21;
                 time_cnt = 0;
             }
             break;
 
-        case 21: /* 冲水 22（60 s）*/
+        case 21: /* 冲水 22（240 s）*/
             if (time_cnt == 0)
             {
+                TURN_ON(11);
+                // TURN_OFF(25);
+
                 TURN_ON(9);
                 TURN_ON(3);
-                GROUP_ON(12, 19);
+                TURN_ON(16);
+                TURN_ON(17);
                 motor_run();
             }
-            if (++time_cnt >= 30)
+            if (++time_cnt >= 480)
             {
                 motor_stop();
                 status = 22;
@@ -726,14 +829,16 @@ void sixmin_test_task(void *pvParameters)
         case 22: /* 暂停 23（10 s）*/
             if (time_cnt == 0)
             {
+                // TURN_OFF(11);
                 TURN_OFF(9);
                 TURN_OFF(3);
-                GROUP_OFF(12, 19);
+                TURN_OFF(16);
+                TURN_OFF(17);
 
-                TURN_OFF(11); // 关闭直排
-                TURN_OFF(25);
+                TURN_ON(11); // 打开直排
+                // TURN_ON(25);
             }
-            if (++time_cnt >= 10)
+            if (++time_cnt >= 5)
             {
                 status = 23;
                 time_cnt = 0;
@@ -746,6 +851,10 @@ void sixmin_test_task(void *pvParameters)
             {
                 TURN_OFF(i);
             }
+            gpio_set_level(GPIO_NUM_19, 0);
+            // TURN_ON(11);
+            // vTaskDelay(pdMS_TO_TICKS(120));
+            // TURN_OFF(11);
             ESP_LOGI(TAG, "Mode0 finished, deleting task");
             // 设置电机任务的 FINISH_BIT，电机任务收到后自动收杆
             xEventGroupSetBits(event_motor_ctrl, Motor_Finsh_BIT);
