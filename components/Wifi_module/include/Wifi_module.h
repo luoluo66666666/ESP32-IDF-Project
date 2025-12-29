@@ -8,3 +8,5 @@ void Wifi_task(void);
 void wifi_module_queue_init(void);
 
 void mywifi_log(const char *fmt, ...);
+
+void wifi_tcp_start(void);
