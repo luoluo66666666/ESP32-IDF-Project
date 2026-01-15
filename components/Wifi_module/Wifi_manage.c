@@ -20,6 +20,8 @@
 
 #include "driver/gpio.h"
 
+#include "ctrl_protocol.h" // Include the ctrl_protocol header for ctrl_protocol functions
+
 static esp_err_t save_sn_to_nvs(const char *sn);
 static volatile bool tcp_connected = false;
 static volatile bool sn_updated = false;
@@ -61,6 +63,76 @@ static int tcp_sock = -1; // socket 文件描述符，初始化为无效
 /* 上一次收到数据的时间戳（毫秒） */
 static int64_t last_recv_tick = 0;
 
+// Wifi事件组位定义
+static QueueHandle_t wifi_tx_queue = NULL; // WiFi发送队列句柄
+static QueueHandle_t wifi_rx_queue = NULL; // WiFi接收队列句柄
+#define QUEUE_ITEM_SIZE 256                // 队列中每个数据项的大小，这里设置为256字节
+
+// 定义WiFi数据结构体，用于存储发送和接收的数据
+typedef struct
+{
+    uint8_t buf[QUEUE_ITEM_SIZE];
+    size_t len;
+} wifi_data_t;
+
+/************************** WiFi模块队列初始化 **************************/
+void wifi_module_queue_init(void)
+{
+    // 创建WiFi发送和接收队列
+    wifi_tx_queue = xQueueCreate(128, sizeof(wifi_data_t)); // 发送队列
+    wifi_rx_queue = xQueueCreate(128, sizeof(wifi_data_t)); // 接收队列
+
+    if (wifi_tx_queue == NULL || wifi_rx_queue == NULL)
+    {
+        ESP_LOGE(TAG, "Failed to create WiFi queues");
+        return;
+    }
+    ESP_LOGI(TAG, "WiFi queues created successfully");
+}
+
+void wifi_receive_task(void *param)
+{
+    wifi_data_t data;
+    static char response[256];
+
+    while (1)
+    {
+        if (xQueueReceive(wifi_rx_queue, &data, portMAX_DELAY) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "wifi RX: %.*s", (int)data.len, data.buf);
+
+            memset(response, 0, sizeof(response));
+            ctrl_protocol((char *)data.buf, response, sizeof(response));
+
+            if (strlen(response) > 0 && wifi_tx_queue)
+            {
+                wifi_data_t tx_data = {0};
+                strncpy((char *)tx_data.buf, response, sizeof(tx_data.buf) - 1);
+                tx_data.len = strlen((char *)tx_data.buf);
+
+                xQueueSend(wifi_tx_queue, &tx_data, 0);
+            }
+        }
+    }
+}
+
+void wifi_send_task(void *param)
+{
+    wifi_data_t data;
+
+    while (1)
+    {
+        if (xQueueReceive(wifi_tx_queue, &data, portMAX_DELAY) == pdTRUE)
+        {
+            if (tcp_connected && tcp_sock >= 0)
+            {
+                send(tcp_sock, data.buf, data.len, 0);
+                ESP_LOGI(TAG, "TCP TX: %.*s", (int)data.len, data.buf);
+            }
+        }
+    }
+}
+
 /* =================== WiFi 事件回调 =================== */
 static void wifi_event_handler(void *arg,
                                esp_event_base_t event_base,
@@ -72,7 +144,7 @@ static void wifi_event_handler(void *arg,
     {
         // WiFi 启动成功后，立即尝试连接 WiFi
         esp_wifi_connect();
-    }   
+    }
     else if (event_base == WIFI_EVENT &&
              event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
@@ -254,158 +326,316 @@ static void handle_cmd(const char *cmd)
 }
 
 /* =================== TCP 客户端任务 =================== */
-static void tcp_client_task(void *arg)
+// static void tcp_client_task(void *arg)
+// {
+//     char rx_buf[256];
+//     char line_buf[256];
+//     int line_len = 0;
+
+//     /* 等待 WiFi 连接 */
+//     xEventGroupWaitBits(
+//         wifi_event_group,
+//         WIFI_CONNECTED_BIT,
+//         false,
+//         true,
+//         portMAX_DELAY);
+
+//     while (1)
+//     {
+//         struct sockaddr_in server_addr = {
+//             .sin_family = AF_INET,
+//             .sin_port = htons(SERVER_PORT),
+//             .sin_addr.s_addr = inet_addr(SERVER_IP),
+//         };
+
+//         tcp_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+//         if (tcp_sock < 0)
+//         {
+//             ESP_LOGE(TAG, "Create socket failed");
+//             vTaskDelay(pdMS_TO_TICKS(2000));
+//             continue;
+//         }
+
+//         ESP_LOGI(TAG, "Connecting to server...");
+//         if (connect(tcp_sock,
+//                     (struct sockaddr *)&server_addr,
+//                     sizeof(server_addr)) != 0)
+//         {
+//             ESP_LOGE(TAG, "Connect failed");
+//             close(tcp_sock);
+//             tcp_sock = -1;
+//             vTaskDelay(pdMS_TO_TICKS(2000));
+//             continue;
+//         }
+
+//         tcp_connected = true;
+//         ESP_LOGI(TAG, "TCP connected");
+
+//         /* ===== REG ===== */
+//         char reg_msg[64];
+//         snprintf(reg_msg, sizeof(reg_msg),
+//                  "REG|%s|1.0.0\n", device_sn);
+//         tcp_send(reg_msg);
+
+//         int64_t now = esp_timer_get_time() / 1000;
+//         last_recv_tick = now;
+//         int64_t last_heartbeat = now;
+
+//         memset(line_buf, 0, sizeof(line_buf));
+//         line_len = 0;
+
+//         while (tcp_connected)
+//         {
+//             fd_set read_fds;
+//             struct timeval tv;
+
+//             FD_ZERO(&read_fds);
+//             FD_SET(tcp_sock, &read_fds);
+
+//             tv.tv_sec = 1;
+//             tv.tv_usec = 0;
+
+//             int ret = select(tcp_sock + 1, &read_fds, NULL, NULL, &tv);
+//             if (ret > 0 && FD_ISSET(tcp_sock, &read_fds))
+//             {
+//                 int len = recv(tcp_sock, rx_buf, sizeof(rx_buf), 0);
+//                 if (len <= 0)
+//                 {
+//                     ESP_LOGW(TAG, "Server disconnected");
+//                     break;
+//                 }
+
+//                 for (int i = 0; i < len; i++)
+//                 {
+//                     char c = rx_buf[i];
+
+//                     if (c == '\n')
+//                     {
+//                         line_buf[line_len] = 0;
+
+//                         /* ===== PONG ===== */
+//                         if (strcmp(line_buf, "PONG") == 0)
+//                         {
+//                             last_recv_tick = esp_timer_get_time() / 1000;
+//                         }
+//                         else
+//                         {
+//                             handle_cmd(line_buf);
+//                         }
+
+//                         line_len = 0;
+//                         memset(line_buf, 0, sizeof(line_buf));
+//                     }
+//                     else if (line_len < sizeof(line_buf) - 1)
+//                     {
+//                         line_buf[line_len++] = c;
+//                     }
+//                 }
+
+//                 last_recv_tick = esp_timer_get_time() / 1000;
+//             }
+
+//             now = esp_timer_get_time() / 1000;
+
+//             /* ===== 心跳 ===== */
+//             if (now - last_heartbeat >= HEARTBEAT_INTERVAL_MS)
+//             {
+//                 tcp_send("PING\n");
+//                 last_heartbeat = now;
+//             }
+
+//             /* ===== SN 已修改，安全重连 ===== */
+//             if (sn_updated)
+//             {
+//                 ESP_LOGW(TAG, "SN updated, reconnecting...");
+//                 sn_updated = false;
+
+//                 /* 给 ACK 一点时间真正发出去 */
+//                 vTaskDelay(pdMS_TO_TICKS(200));
+//                 break;
+//             }
+
+//             /* ===== 心跳超时 ===== */
+//             if (now - last_recv_tick >= HEARTBEAT_TIMEOUT_MS)
+//             {
+//                 ESP_LOGW(TAG, "Heartbeat timeout");
+//                 break;
+//             }
+//         }
+
+//         /* ===== 清理 socket ===== */
+//         tcp_connected = false;
+
+//         if (tcp_sock >= 0)
+//         {
+//             shutdown(tcp_sock, SHUT_RDWR);
+//             close(tcp_sock);
+//             tcp_sock = -1;
+//         }
+
+//         ESP_LOGI(TAG, "Reconnect in 2s...");
+//         vTaskDelay(pdMS_TO_TICKS(2000));
+//     }
+// }
+
+void tcp_client_task(void *param)
 {
     char rx_buf[256];
     char line_buf[256];
     int line_len = 0;
 
-    /* 等待 WiFi 连接 */
-    xEventGroupWaitBits(
-        wifi_event_group,
-        WIFI_CONNECTED_BIT,
-        false,
-        true,
-        portMAX_DELAY);
-
     while (1)
     {
+        /* 1️⃣ 等 WiFi */
+        xEventGroupWaitBits(wifi_event_group,
+                            WIFI_CONNECTED_BIT,
+                            false,
+                            true,
+                            portMAX_DELAY);
+
+        /* 2️⃣ 建立 socket */
+        int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+        if (sock < 0)
+        {
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            continue;
+        }
+
         struct sockaddr_in server_addr = {
             .sin_family = AF_INET,
             .sin_port = htons(SERVER_PORT),
             .sin_addr.s_addr = inet_addr(SERVER_IP),
         };
 
-        tcp_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-        if (tcp_sock < 0)
-        {
-            ESP_LOGE(TAG, "Create socket failed");
-            vTaskDelay(pdMS_TO_TICKS(2000));
-            continue;
-        }
-
-        ESP_LOGI(TAG, "Connecting to server...");
-        if (connect(tcp_sock,
-                    (struct sockaddr *)&server_addr,
+        if (connect(sock, (struct sockaddr *)&server_addr,
                     sizeof(server_addr)) != 0)
         {
-            ESP_LOGE(TAG, "Connect failed");
-            close(tcp_sock);
-            tcp_sock = -1;
+            close(sock);
             vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
         }
 
-        tcp_connected = true;
         ESP_LOGI(TAG, "TCP connected");
 
-        /* ===== REG ===== */
-        char reg_msg[64];
-        snprintf(reg_msg, sizeof(reg_msg),
+        /* 3️⃣ 发送 REG */
+        char reg[64];
+        snprintf(reg, sizeof(reg),
                  "REG|%s|1.0.0\n", device_sn);
-        tcp_send(reg_msg);
+        send(sock, reg, strlen(reg), 0);
 
-        int64_t now = esp_timer_get_time() / 1000;
-        last_recv_tick = now;
-        int64_t last_heartbeat = now;
-
-        memset(line_buf, 0, sizeof(line_buf));
         line_len = 0;
 
-        while (tcp_connected)
+        while (1)
         {
-            fd_set read_fds;
-            struct timeval tv;
+            fd_set rfds;
+            struct timeval tv = {.tv_sec = 1};
 
-            FD_ZERO(&read_fds);
-            FD_SET(tcp_sock, &read_fds);
+            FD_ZERO(&rfds);
+            FD_SET(sock, &rfds);
 
-            tv.tv_sec = 1;
-            tv.tv_usec = 0;
+            int ret = select(sock + 1, &rfds, NULL, NULL, &tv);
 
-            int ret = select(tcp_sock + 1, &read_fds, NULL, NULL, &tv);
-            if (ret > 0 && FD_ISSET(tcp_sock, &read_fds))
+            /* ===== 接收 ===== */
+            if (ret > 0 && FD_ISSET(sock, &rfds))
             {
-                int len = recv(tcp_sock, rx_buf, sizeof(rx_buf), 0);
+                int len = recv(sock, rx_buf, sizeof(rx_buf), 0);
                 if (len <= 0)
-                {
-                    ESP_LOGW(TAG, "Server disconnected");
                     break;
-                }
 
                 for (int i = 0; i < len; i++)
                 {
                     char c = rx_buf[i];
+                    if (c == '\r')
+                        continue;
 
                     if (c == '\n')
                     {
                         line_buf[line_len] = 0;
 
-                        /* ===== PONG ===== */
-                        if (strcmp(line_buf, "PONG") == 0)
-                        {
-                            last_recv_tick = esp_timer_get_time() / 1000;
-                        }
-                        else
-                        {
-                            handle_cmd(line_buf);
-                        }
+                        /* 去 CMD| */
+                        char *payload = line_buf;
+                        if (strncmp(payload, "CMD|", 4) == 0)
+                            payload += 4;
 
+                        wifi_data_t pkt = {0};
+                        strncpy((char *)pkt.buf,
+                                payload,
+                                QUEUE_ITEM_SIZE - 1);
+                        pkt.len = strlen((char *)pkt.buf);
+
+                        xQueueSend(wifi_rx_queue, &pkt, 0);
                         line_len = 0;
-                        memset(line_buf, 0, sizeof(line_buf));
                     }
                     else if (line_len < sizeof(line_buf) - 1)
                     {
                         line_buf[line_len++] = c;
                     }
                 }
-
-                last_recv_tick = esp_timer_get_time() / 1000;
             }
 
-            now = esp_timer_get_time() / 1000;
-
-            /* ===== 心跳 ===== */
-            if (now - last_heartbeat >= HEARTBEAT_INTERVAL_MS)
+            /* ===== 发送 ===== */
+            wifi_data_t tx;
+            if (xQueueReceive(wifi_tx_queue, &tx, 0) == pdTRUE)
             {
-                tcp_send("PING\n");
-                last_heartbeat = now;
-            }
-
-            /* ===== SN 已修改，安全重连 ===== */
-            if (sn_updated)
-            {
-                ESP_LOGW(TAG, "SN updated, reconnecting...");
-                sn_updated = false;
-
-                /* 给 ACK 一点时间真正发出去 */
-                vTaskDelay(pdMS_TO_TICKS(200));
-                break;
-            }
-
-            /* ===== 心跳超时 ===== */
-            if (now - last_recv_tick >= HEARTBEAT_TIMEOUT_MS)
-            {
-                ESP_LOGW(TAG, "Heartbeat timeout");
-                break;
+                send(sock, tx.buf, tx.len, 0);
             }
         }
 
-        /* ===== 清理 socket ===== */
-        tcp_connected = false;
+        ESP_LOGW(TAG, "TCP disconnected");
+        shutdown(sock, SHUT_RDWR);
+        close(sock);
 
-        if (tcp_sock >= 0)
-        {
-            shutdown(tcp_sock, SHUT_RDWR);
-            close(tcp_sock);
-            tcp_sock = -1;
-        }
-
-        ESP_LOGI(TAG, "Reconnect in 2s...");
         vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
+void wifi_protocol_task(void *param)
+{
+    wifi_data_t rx;
+    char response[256];
+
+    while (1)
+    {
+        if (xQueueReceive(wifi_rx_queue, &rx, portMAX_DELAY) == pdTRUE)
+        {
+            ESP_LOGI(TAG, "WIFI RX: %s", rx.buf);
+
+            memset(response, 0, sizeof(response));
+
+            /* 🔴 完全不改你的协议 */
+            ctrl_protocol((char *)rx.buf,
+                          response,
+                          sizeof(response));
+
+            if (strlen(response) > 0)
+            {
+                wifi_data_t tx = {0};
+
+                /* 安全拼 ACK */
+                snprintf((char *)tx.buf,
+                         QUEUE_ITEM_SIZE,
+                         "ACK|%.*s",
+                         QUEUE_ITEM_SIZE - 5,
+                         response);
+
+                /* 统一结尾为 \n */
+                size_t len = strlen((char *)tx.buf);
+                if (len == 0 || tx.buf[len - 1] != '\n')
+                {
+                    if (len < QUEUE_ITEM_SIZE - 1)
+                    {
+                        tx.buf[len++] = '\n';
+                        tx.buf[len] = 0;
+                    }
+                }
+
+                tx.len = len;
+
+                xQueueSend(wifi_tx_queue, &tx, 0);
+            }
+        }
+    }
+}
 
 static esp_err_t load_sn_from_nvs(char *sn, size_t len)
 {
@@ -495,4 +725,13 @@ void wifi_tcp_start(void)
     wifi_init_sta();  // 再启动 WiFi
     xTaskCreate(tcp_client_task, "tcp_client", 4096, NULL, 5, NULL);
     // 创建 TCP 客户端任务
+    wifi_module_queue_init();
+    xTaskCreate(wifi_protocol_task,
+                "wifi_proto",
+                4096,
+                NULL,
+                6,
+                NULL);
+    // xTaskCreate(wifi_receive_task, "wifi_rx_task", 4096, NULL, 6, NULL);
+    // xTaskCreate(wifi_send_task, "wifi_tx_task", 4096, NULL, 6, NULL);
 }
