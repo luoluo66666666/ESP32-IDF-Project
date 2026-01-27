@@ -1,3 +1,14 @@
-idf_component_register(SRCS "Wifi_module.c"
-                    INCLUDE_DIRS "include"
-                    REQUIRES esp_wifi esp_event nvs_flash driver ctrl_protocol)
+idf_component_register(
+    SRCS
+        "Wifi_manage.c"
+        "Wifi_module.c"
+    INCLUDE_DIRS
+        "include"
+    REQUIRES
+        esp_wifi
+        esp_event
+        esp_netif
+        nvs_flash
+        lwip
+        ctrl_protocol
+)

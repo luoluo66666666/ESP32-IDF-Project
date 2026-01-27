@@ -31,7 +31,7 @@
 #include "nimble/nimble_port_freertos.h"
 
 /* Defines */
-#define TAG "LL-tset"
-#define DEVICE_NAME "LL-tset"
+#define TAG "LL-Test"
+#define DEVICE_NAME "LL-Test"
 
 #endif // COMMON_H

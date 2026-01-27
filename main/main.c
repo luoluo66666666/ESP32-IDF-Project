@@ -10,8 +10,6 @@
 #include <esp_log.h>
 #include "rs485_water_valve.h"
 
-
-
 static const char *TAG = "current MODE";
 
 extern void Pole_motor_control_task(void *p);
@@ -23,6 +21,12 @@ void mode_control_task(void *pvParameters)
     EventBits_t bits;
     while (1)
     {
+        /* -----------检测 11 是否被关闭----------- */
+        if (gpio_get_level(GPIO_NUM_45) == 0) // 若 TURN_OFF(11) 被调用
+        {
+            ESP_LOGW(TAG, "Warning: TURN 11 was OFF, restoring it.");
+            TURN_ON(11);
+        }
         bits = xEventGroupWaitBits(event_ctrl_protocol,
                                    Mode0_BIT | Mode1_BIT | Mode2_BIT | Mode3_BIT | Mode4_BIT | Mode5_UPPER_BIT | Mode5_LOWER_BIT,
                                    pdFALSE,        // 清除事件组标志位
@@ -71,21 +75,24 @@ void mode_control_task(void *pvParameters)
         }
     }
 }
-
+/*******************************************************************************
+****@brief: 
+****@author: Luo
+****@date: 2026-01-27 10:30:16
+********************************************************************************/
 void app_main(void)
 {
-    // pin_init();
+    pin_init();
     ctrl_protocol_init(); // Initialize the control protocol
     // Wifi_task();          // 启动wifi模块
+    wifi_tcp_start();
 
     ble_task(); // 启动BLE任务
     // Temp_task();
     // Temp_task();
     // sensor_init();
-    // rs485_task();
+    // temp_rs485_task();   //恒温宝心跳包
     // // 创建控制任务
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
-    // xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
+    xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }
-
-

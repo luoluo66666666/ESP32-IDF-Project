@@ -8,7 +8,6 @@
 // #include "../../../../../../ESP-IDF/v5.4.1/esp-idf/components/esp_adc/include/esp_adc/adc_cali.h"
 #include <math.h>
 
-
 extern QueueHandle_t ble_tx_queue;
 
 int do_pin[] = {
@@ -55,32 +54,29 @@ static const char *FLOW = "flow_sensor";
 // ================== 全局定义 ==================
 #define TAG "SENSOR"
 #define VREF 3300
-#define R_FIXED 50000.0f // 分压电阻
-#define ALPHA   0.2f        // 指数滤波系数
-#define MOVING_AVG_LEN 10          // 滑动平均窗口大小
-
+#define R_FIXED 50000.0f  // 分压电阻
+#define ALPHA 0.2f        // 指数滤波系数
+#define MOVING_AVG_LEN 10 // 滑动平均窗口大小
 
 // ---------- 手动电压校准 ----------
-#define V_CAL_MCU   1.54f   // MCU 实测电压
-#define V_CAL_REAL  1.60f   // 万用表实际电压
-#define V_CORRECTION_FACTOR (V_CAL_REAL / V_CAL_MCU)  // 校准系数
+#define V_CAL_MCU 1.54f                              // MCU 实测电压
+#define V_CAL_REAL 1.60f                             // 万用表实际电压
+#define V_CORRECTION_FACTOR (V_CAL_REAL / V_CAL_MCU) // 校准系数
 
 // 流量传感器参数
 volatile uint32_t flow_pulse_count = 0;
 static uint64_t last_pulse_time_us = 0;
-#define MIN_PULSE_INTERVAL_US 40000   // 40ms 防抖（25Hz以上有效）
-#define PULSE_PER_L 660               // 每升水脉冲数
-#define FLOW_TASK_PERIOD_MS 1000      // 每秒统计一次
+#define MIN_PULSE_INTERVAL_US 40000 // 40ms 防抖（25Hz以上有效）
+#define PULSE_PER_L 660             // 每升水脉冲数
+#define FLOW_TASK_PERIOD_MS 1000    // 每秒统计一次
 
 // ADC 全局
 static adc_continuous_handle_t adc_handle = NULL;
 // static adc_cali_handle_t adc_cali_handle = NULL;
 
-
-extern QueueHandle_t ble_tx_queue;   // 由 BLE 模块提供
+extern QueueHandle_t ble_tx_queue; // 由 BLE 模块提供
 extern uint16_t custom_chr_conn_handle;
 extern bool custom_notify_enabled;
-
 
 // ================== 流量计中断 ==================
 static void IRAM_ATTR flow_isr_handler(void *arg)
@@ -98,14 +94,13 @@ float ntc_resistance_to_temp(float r_ntc)
 {
     const float T0 = 298.15f;  // 25℃ = 298.15K
     const float R0 = 50000.0f; // 25℃ NTC 阻值
-    const float B  = 3950.0f;  // Beta 值
+    const float B = 3950.0f;   // Beta 值
 
     float tempK = 1.0f / ((1.0f / T0) + (1.0f / B) * logf(r_ntc / R0));
     return tempK - 273.15f; // 转摄氏度
 }
 
-
-#define SEND_INTERVAL_MS 5000  // 5 秒
+#define SEND_INTERVAL_MS 5000 // 5 秒
 // // ================== 流量任务 ==================
 // void sensor_task(void *pvParameters)
 // {
@@ -212,10 +207,8 @@ float ntc_resistance_to_temp(float r_ntc)
 //     }
 // }
 
-
-
 /*******************************************************************************
-****@brief 初始化所有 DO（输出）和 DI（输入）引脚 
+****@brief 初始化所有 DO（输出）和 DI（输入）引脚
 * 1. 先遍历 DO 引脚数组，依次复位引脚并设置为输出模式
 * 2. 再遍历 DI 引脚数组，依次复位引脚、设置为输入模式并开启上
 * 3. ADC连续采样，设置ADC1通道5对应GPIO6(di_pin[2])
@@ -396,4 +389,89 @@ int get_di_pin(int index)
 
     ESP_LOGI(TAG, "get_di_pin: Returning DI%d (GPIO%d), level: %d", index, di_pin[index], level);
     return level;
+}
+
+#define INPUT_NUM (sizeof(di_pin) / sizeof(di_pin[0]))
+#define STABLE_COUNT 3 // 稳定判断次数
+uint8_t read_all_inputs(void)
+{
+    uint8_t count[INPUT_NUM] = {0}; // 每路计数
+    uint8_t result = 0;
+    int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
+    int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
+
+    // 连续读取 STABLE_COUNT 次
+    for (int n = 0; n < STABLE_COUNT; n++)
+    {
+        for (int i = 0; i < INPUT_NUM; i++)
+        {
+            if (get_di_pin(i)) // 第 i 路为高
+                count[i]++;
+        }
+    }
+    // 判断每一路是否稳定
+    for (int i = 0; i < INPUT_NUM; i++)
+    {
+        if (count[i] == STABLE_COUNT)
+            result |= (1 << i); // 连续高 → 置 1
+        // 否则保持为 0
+    }
+
+    return result; // 返回八位，每位对应一路输入
+}
+
+uint8_t input_state_change_handler(void)
+{
+
+    int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
+    int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
+    // 读取当前稳定输入状态
+    cur_di = read_all_inputs();
+    last_di = cur_di;
+
+    // 暂停键 DI2 检测
+    if (cur_di & (1 << 2)) // 注意这里用 cur_di 替代未定义的 result
+    {
+        ESP_LOGI(TAG, "Paused");
+
+        // 保存 DO 状态并关闭
+        for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
+        {
+            do_level[i] = get_do_pin(i);
+            TURN_OFF(i);
+        }
+
+        // 等待按键松开（实时更新 cur_di）
+        do
+        {
+            cur_di = read_all_inputs();
+            vTaskDelay(pdMS_TO_TICKS(100)); // 每 100 ms 检查一次
+        } while (cur_di & (1 << 2));
+
+        // 恢复 DO 状态
+        for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
+        {
+            set_do_pin(i, do_level[i]);
+        }
+
+        ESP_LOGI(TAG, "Resumed");
+    }
+
+    return cur_di;
+
+}
+
+/**
+ * @brief 判断跨循环锁定位（DI0~DI2）
+ * @return 1 表示任意锁定位为1，本次任务不允许执行
+ *         0 表示允许执行
+ */
+uint8_t check_cross_loop_lock(void)
+{
+    if (cur_di & (1 << 0)) { ESP_LOGI(TAG, "DI0 锁定"); return 1; }
+    if (cur_di & (1 << 1)) { ESP_LOGI(TAG, "DI1 锁定"); return 1; }
+    if (cur_di & (1 << 2)) { ESP_LOGI(TAG, "DI2 锁定"); return 1; }
+
+    return 0; // 没有锁定，允许执行
+
 }

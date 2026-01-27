@@ -6,4 +6,9 @@
 cmake_minimum_required(VERSION 3.16)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
+# 👇 指定自定义分区表
+set(PARTITION_TABLE_CUSTOM_FILENAME "partitions.csv")
+set(PARTITION_TABLE_CUSTOM_APP_BIN_OFFSET 0x10000)
+
 project(wifi_eap_fast)

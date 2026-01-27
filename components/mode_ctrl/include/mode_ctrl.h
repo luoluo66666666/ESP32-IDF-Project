@@ -73,6 +73,9 @@ static inline void delay_1s(void)
     vTaskDelay(pdMS_TO_TICKS(1000)); // pdMS_TO_TICKS 宏将毫秒转换为 FreeRTOS 时钟节
 }
 
+static uint8_t last_di = 0;
+static uint8_t cur_di = 0;
+
 /* 公用函数声明 */
 extern int do_pin[];
 
@@ -93,5 +96,8 @@ int mode5_down(void);
 void test_task(void *pvParameters);
 void start_mode_test(void);
 
+uint8_t read_all_inputs(void);
+uint8_t input_state_change_handler(void);
+uint8_t check_cross_loop_lock(void);
 
 #endif // __MODE_CTRL_H__

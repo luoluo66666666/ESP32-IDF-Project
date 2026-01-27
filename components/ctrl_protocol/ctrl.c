@@ -55,15 +55,15 @@ void Pole_motor_control_task(void *p)
         {
         finsh_motor:
             // 收杆
-            TURN_OFF(1);
-            TURN_ON(0);
+            TURN_OFF(0);
+            TURN_ON(1);
             pole1_state = POLE_RETRACTED;
-            TURN_OFF(21);
-            TURN_ON(20);
+            TURN_OFF(20);
+            TURN_ON(21);
             pole2_state = POLE_RETRACTED;
             vTaskDelay(pdMS_TO_TICKS(5000)); // 给收杆动作预留时间
-            TURN_OFF(0);
-            TURN_OFF(20);
+            TURN_OFF(21);
+            TURN_OFF(1);
 
             xEventGroupClearBits(event_motor_ctrl, Motor_Finsh_BIT | Motor_RUN_BIT | Motor_STOP_BIT);
             ESP_LOGI(TAG, "Motor FINISH detected, all retracted");
@@ -478,22 +478,43 @@ void ctrl_protocol(char *input, char *output, int maxlen)
     /* 6. 恒温宝控制命令： temp set/get*/
     if (strncasecmp(input, "temp", 4) == 0)
     {
+        uint8_t temp_addr = 1;
         char action[16] = {0};
         int value = 0;
         int args = sscanf(input, "temp %15s %d", action, &value);
-
+        RS485_init();
         if (args >= 1)
         {
             if (strcasecmp(action, "set") == 0)
             {
                 // 写入温度设定寄存器（0x0001），单位：℃
-                temp_rs485_write_register(0x01, 0x0001, (uint16_t)value);
+                temp_rs485_write_register(temp_addr, 0x0000, 0x00C0);
+                vTaskDelay(pdMS_TO_TICKS(200));
+
+                temp_rs485_write_register(temp_addr, 0x0001, (uint16_t)value);
+                vTaskDelay(pdMS_TO_TICKS(200));
+
+                temp_rs485_read_register(temp_addr, 0x0000, 2);
+                vTaskDelay(pdMS_TO_TICKS(200));
+                // 读取单个寄存器 0x0002（当前设定温度）
+                temp_rs485_read_register(temp_addr, 0x0002, 1);
+                vTaskDelay(pdMS_TO_TICKS(200));
+
+                // 读取 0x0001 起始的 4 个寄存器（温度/流量等连续数据）
+                temp_rs485_read_register(temp_addr, 0x0001, 4);
+                vTaskDelay(pdMS_TO_TICKS(200));
+
+                ESP_LOGI(TAG, "Test sequence finished");
                 snprintf(output, maxlen, "TEMP,SET,%d\r\n", value);
             }
             else if (strcasecmp(action, "get") == 0)
             {
+                // temp_rs485_write_register(temp_addr, 0x0000, 0x00C0);
+                // vTaskDelay(pdMS_TO_TICKS(200));
                 // 读取起始寄存器 0x0001，共4个寄存器（温度/设定温度/流量等）
-                temp_rs485_read_register(0x01, 0x0001, 4);
+                temp_rs485_read_register(temp_addr, 0x0000, 2);
+                vTaskDelay(pdMS_TO_TICKS(200));
+                temp_rs485_read_register(temp_addr, 0x0001, 4);
                 snprintf(output, maxlen, "TEMP,READ_OK\r\n");
             }
             else if (strcasecmp(action, "test") == 0)
