@@ -1,8 +1,6 @@
 build/
-sdkconfig
-sdkconfig.old
-sdkconfig.defaults
 dependencies.lock
 idf-driver-esp32-usb-jtag-2021-07-15.zip
 idf-env.exe
 debug.log
+.vscode/
