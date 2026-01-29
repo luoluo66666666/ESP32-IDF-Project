@@ -69,3 +69,17 @@ I (12800) example: MASK:255.255.255.0
 I (12800) example: GW:192.168.5.1
 I (12800) example: ~~~~~~~~~~~
 ```
+
+###分区表设置
+# Name,        Type, SubType,   Offset,    Size,    Flags
+nvs,           data, nvs,       0x9000,    0x6000,  # 基础 NVS（系统用）
+phy_init,      data, phy,       0xF000,    0x1000,  # WiFi/蓝牙 PHY 数据
+factory,       app,  factory,   0x10000,   0x180000, # 新增：出厂分区（1.5MB）
+ota_0,         app,  ota_0,     0x190000,  0x180000, # OTA 分区1（顺延地址）
+ota_1,         app,  ota_1,     0x310000,  0x180000, # OTA 分区2（顺延地址）
+spiffs,        data, spiffs,    0x490000,  0xE0000,  # SPIFFS 文件系统（顺延）
+device_nvs,    data, nvs,       0x570000,  0x6000,   # 自定义 NVS（设备配置）
+nvs_key,       data, nvs_keys,  0x576000,  0x1000    # NVS 密钥（顺延）
+
+###OTA升级
+本地使用终端输入python -m http.server 8080直接建立端口,ota那边使用wifi联网再接入对应的端口
