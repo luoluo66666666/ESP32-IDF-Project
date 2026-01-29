@@ -22,14 +22,17 @@
 
 #include "ctrl_protocol.h" // Include the ctrl_protocol header for ctrl_protocol functions
 
+// OTA header (from components/OTA)
+#include "Http_ota.h"
+
 static esp_err_t save_sn_to_nvs(const char *sn);
 static volatile bool tcp_connected = false;
 static volatile bool sn_updated = false;
 
 /* =================== 用户配置 =================== */
 // WiFi SSID 和密码
-#define WIFI_SSID "JT-13F"
-#define WIFI_PASSWORD "jt123456"
+#define WIFI_SSID "ZMJD"
+#define WIFI_PASSWORD "ZM888888"
 
 // 云服务器 IP 和端口
 #define SERVER_IP "192.168.172.107"
@@ -56,6 +59,9 @@ static const char *TAG = "WIFI_TCP"; // 日志 TAG，用于 ESP_LOG*
 /* WiFi 事件标志位 */
 static EventGroupHandle_t wifi_event_group;
 #define WIFI_CONNECTED_BIT BIT0 // WiFi 已连接标志位
+
+// 本地跟踪 WiFi 是否已启动（esp_wifi_is_started 在部分 IDF 版本不可用）
+static bool s_wifi_started = false;
 
 /* TCP socket 描述符 */
 static int tcp_sock = -1; // socket 文件描述符，初始化为无效
@@ -227,8 +233,68 @@ static void wifi_init_sta(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // 设置为 STA 模式
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start()); // 启动 WiFi
+    s_wifi_started = true;
 
     ESP_LOGI(TAG, "wifi_init_sta finished");
+}
+
+/* OTA 模式相关 */
+static bool s_wifi_ota_started_by_me = false;
+static TaskHandle_t s_wifi_ota_ota_task_handle = NULL;
+
+void wifi_ota_mode_start(const char *default_url)
+{
+    ESP_LOGI(TAG, "Entering OTA mode: wifi_ota_mode_start()");
+
+    // 如果 WiFi 已经启动（可能被 TCP 模块使用），直接等待连接
+    bool wifi_started = s_wifi_started;
+
+    if (!wifi_started) {
+        ESP_LOGI(TAG, "WiFi not started, initializing STA for OTA");
+        // reuse existing helper to init STA
+        wifi_init_sta();
+        s_wifi_ota_started_by_me = true;
+    } else {
+        ESP_LOGI(TAG, "WiFi already started, OTA mode will reuse current WiFi");
+    }
+
+    // 等待连接（使用共享的 wifi_event_group）
+    EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(30000));
+    if ((bits & WIFI_CONNECTED_BIT) == 0) {
+        ESP_LOGE(TAG, "OTA mode: waiting for IP timed out");
+        return;
+    }
+
+    ESP_LOGI(TAG, "OTA mode: WiFi connected, starting HTTP OTA task");
+
+    http_ota_config_t cfg = {0};
+    if (default_url) strncpy(cfg.firmware_url, default_url, sizeof(cfg.firmware_url) - 1);
+    cfg.task_stack_size = 8192;
+    cfg.task_prio = 5;
+
+    s_wifi_ota_ota_task_handle = http_ota_start(&cfg);
+    if (s_wifi_ota_ota_task_handle) {
+        ESP_LOGI(TAG, "OTA task started from wifi module (handle=%p)", s_wifi_ota_ota_task_handle);
+    } else {
+        ESP_LOGE(TAG, "Failed to start OTA task from wifi module");
+    }
+}
+
+void wifi_ota_mode_stop(void)
+{
+    ESP_LOGI(TAG, "Exiting OTA mode: wifi_ota_mode_stop()");
+    if (s_wifi_ota_ota_task_handle) {
+        http_ota_stop(s_wifi_ota_ota_task_handle);
+        s_wifi_ota_ota_task_handle = NULL;
+    }
+
+    if (s_wifi_ota_started_by_me) {
+        ESP_LOGI(TAG, "Stopping WiFi started for OTA");
+        esp_wifi_stop();
+        esp_wifi_deinit();
+        s_wifi_ota_started_by_me = false;
+        s_wifi_started = false;
+    }
 }
 
 /* =================== TCP 发送函数 =================== */
@@ -326,158 +392,6 @@ static void handle_cmd(const char *cmd)
 }
 
 /* =================== TCP 客户端任务 =================== */
-// static void tcp_client_task(void *arg)
-// {
-//     char rx_buf[256];
-//     char line_buf[256];
-//     int line_len = 0;
-
-//     /* 等待 WiFi 连接 */
-//     xEventGroupWaitBits(
-//         wifi_event_group,
-//         WIFI_CONNECTED_BIT,
-//         false,
-//         true,
-//         portMAX_DELAY);
-
-//     while (1)
-//     {
-//         struct sockaddr_in server_addr = {
-//             .sin_family = AF_INET,
-//             .sin_port = htons(SERVER_PORT),
-//             .sin_addr.s_addr = inet_addr(SERVER_IP),
-//         };
-
-//         tcp_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-//         if (tcp_sock < 0)
-//         {
-//             ESP_LOGE(TAG, "Create socket failed");
-//             vTaskDelay(pdMS_TO_TICKS(2000));
-//             continue;
-//         }
-
-//         ESP_LOGI(TAG, "Connecting to server...");
-//         if (connect(tcp_sock,
-//                     (struct sockaddr *)&server_addr,
-//                     sizeof(server_addr)) != 0)
-//         {
-//             ESP_LOGE(TAG, "Connect failed");
-//             close(tcp_sock);
-//             tcp_sock = -1;
-//             vTaskDelay(pdMS_TO_TICKS(2000));
-//             continue;
-//         }
-
-//         tcp_connected = true;
-//         ESP_LOGI(TAG, "TCP connected");
-
-//         /* ===== REG ===== */
-//         char reg_msg[64];
-//         snprintf(reg_msg, sizeof(reg_msg),
-//                  "REG|%s|1.0.0\n", device_sn);
-//         tcp_send(reg_msg);
-
-//         int64_t now = esp_timer_get_time() / 1000;
-//         last_recv_tick = now;
-//         int64_t last_heartbeat = now;
-
-//         memset(line_buf, 0, sizeof(line_buf));
-//         line_len = 0;
-
-//         while (tcp_connected)
-//         {
-//             fd_set read_fds;
-//             struct timeval tv;
-
-//             FD_ZERO(&read_fds);
-//             FD_SET(tcp_sock, &read_fds);
-
-//             tv.tv_sec = 1;
-//             tv.tv_usec = 0;
-
-//             int ret = select(tcp_sock + 1, &read_fds, NULL, NULL, &tv);
-//             if (ret > 0 && FD_ISSET(tcp_sock, &read_fds))
-//             {
-//                 int len = recv(tcp_sock, rx_buf, sizeof(rx_buf), 0);
-//                 if (len <= 0)
-//                 {
-//                     ESP_LOGW(TAG, "Server disconnected");
-//                     break;
-//                 }
-
-//                 for (int i = 0; i < len; i++)
-//                 {
-//                     char c = rx_buf[i];
-
-//                     if (c == '\n')
-//                     {
-//                         line_buf[line_len] = 0;
-
-//                         /* ===== PONG ===== */
-//                         if (strcmp(line_buf, "PONG") == 0)
-//                         {
-//                             last_recv_tick = esp_timer_get_time() / 1000;
-//                         }
-//                         else
-//                         {
-//                             handle_cmd(line_buf);
-//                         }
-
-//                         line_len = 0;
-//                         memset(line_buf, 0, sizeof(line_buf));
-//                     }
-//                     else if (line_len < sizeof(line_buf) - 1)
-//                     {
-//                         line_buf[line_len++] = c;
-//                     }
-//                 }
-
-//                 last_recv_tick = esp_timer_get_time() / 1000;
-//             }
-
-//             now = esp_timer_get_time() / 1000;
-
-//             /* ===== 心跳 ===== */
-//             if (now - last_heartbeat >= HEARTBEAT_INTERVAL_MS)
-//             {
-//                 tcp_send("PING\n");
-//                 last_heartbeat = now;
-//             }
-
-//             /* ===== SN 已修改，安全重连 ===== */
-//             if (sn_updated)
-//             {
-//                 ESP_LOGW(TAG, "SN updated, reconnecting...");
-//                 sn_updated = false;
-
-//                 /* 给 ACK 一点时间真正发出去 */
-//                 vTaskDelay(pdMS_TO_TICKS(200));
-//                 break;
-//             }
-
-//             /* ===== 心跳超时 ===== */
-//             if (now - last_recv_tick >= HEARTBEAT_TIMEOUT_MS)
-//             {
-//                 ESP_LOGW(TAG, "Heartbeat timeout");
-//                 break;
-//             }
-//         }
-
-//         /* ===== 清理 socket ===== */
-//         tcp_connected = false;
-
-//         if (tcp_sock >= 0)
-//         {
-//             shutdown(tcp_sock, SHUT_RDWR);
-//             close(tcp_sock);
-//             tcp_sock = -1;
-//         }
-
-//         ESP_LOGI(TAG, "Reconnect in 2s...");
-//         vTaskDelay(pdMS_TO_TICKS(2000));
-//     }
-// }
-
 void tcp_client_task(void *param)
 {
     char rx_buf[256];

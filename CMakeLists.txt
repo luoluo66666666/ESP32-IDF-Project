@@ -11,4 +11,4 @@ include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 set(PARTITION_TABLE_CUSTOM_FILENAME "partitions.csv")
 set(PARTITION_TABLE_CUSTOM_APP_BIN_OFFSET 0x10000)
 
-project(wifi_eap_fast)
+project(ESP-wash)

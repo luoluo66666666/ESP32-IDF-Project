@@ -56,7 +56,7 @@
     "text_encoding": "c"
   },
   "idf.flashType": "UART",
-  "idf.portWin": "COM14",
+  "idf.portWin": "COM5",
   "python-envs.defaultEnvManager": "ms-python.python:system",
   "python-envs.pythonProjects": [],
   "idf.pythonInstallPath": "d:\\ESP.SSIF\\tools\\idf-python\\3.11.2\\python.exe",
@@ -68,5 +68,8 @@
     "--background-index",
     "--query-driver=**",
     "--compile-commands-dir=e:\\Work\\Projects\\ESP-wash\\build"
+  ],
+  "idf.openOcdConfigs": [
+    "board/esp32s3-builtin.cfg"
   ]
 }

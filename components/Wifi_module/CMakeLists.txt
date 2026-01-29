@@ -11,4 +11,5 @@ idf_component_register(
         nvs_flash
         lwip
         ctrl_protocol
+        OTA
 )

@@ -12,4 +12,5 @@ idf_component_register(
         Task_manager 
         bt
         ctrl_protocol
+        OTA
 )

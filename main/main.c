@@ -82,10 +82,11 @@ void mode_control_task(void *pvParameters)
 ********************************************************************************/
 void app_main(void)
 {
-    pin_init();
+    // pin_init();
     ctrl_protocol_init(); // Initialize the control protocol
     // Wifi_task();          // 启动wifi模块
-    wifi_tcp_start();
+    // wifi_tcp_start();
+    wifi_ota_mode_start("http://192.168.1.125:8080/ESP-wash.bin");
 
     ble_task(); // 启动BLE任务
     // Temp_task();

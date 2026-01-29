@@ -6,4 +6,5 @@ idf_component_register(
     REQUIRES 
         "mode_ctrl" 
         "RS485"
+        "OTA"
 )

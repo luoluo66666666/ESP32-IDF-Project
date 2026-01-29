@@ -8,8 +8,9 @@
 
 #include "esp_log.h"
 
-#include "mode_ctrl.h" // 引入模式控制相关函数的头文件
+#include "mode_ctrl.h"      // 引入模式控制相关函数的头文件
 #include "rs485_water_valve.h"
+#include "Http_ota.h"       // 引入 OTA 相关函数
 extern EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 // EventGroupHandle_t event_ctrl_protocol; // 事件组句柄，用于管理运行/故障/模式状态
 const char *TAG = "CTRL_PROTOCOL"; // 日志TAG
@@ -535,6 +536,49 @@ void ctrl_protocol(char *input, char *output, int maxlen)
 
         return;
     }
+    
+    /* 7. OTA 固件升级命令 */
+    if (strncasecmp(input, "ota", 3) == 0)
+    {
+        // 支持格式：
+        //   ota              （使用默认 URL）
+        //   ota http://...   （使用指定 URL）
+        char url[256] = {0};
+        
+        // 尝试解析 URL
+        if (sscanf(input, "ota %255s", url) == 1)
+        {
+            // 使用指定的 URL 触发 OTA
+            esp_err_t ret = http_ota_trigger(url);
+            if (ret == ESP_OK)
+            {
+                snprintf(output, maxlen, "OTA,URL_TRIGGERED,OK\r\n");
+                ESP_LOGI(TAG, "OTA with custom URL triggered successfully");
+            }
+            else
+            {
+                snprintf(output, maxlen, "OTA,URL_TRIGGERED,ERR\r\n");
+                ESP_LOGE(TAG, "Failed to trigger OTA with custom URL: %s", esp_err_to_name(ret));
+            }
+        }
+        else
+        {
+            // 使用默认 URL 触发 OTA
+            esp_err_t ret = http_ota_trigger(NULL);
+            if (ret == ESP_OK)
+            {
+                snprintf(output, maxlen, "OTA,DEFAULT,OK\r\n");
+                ESP_LOGI(TAG, "OTA with default URL triggered successfully");
+            }
+            else
+            {
+                snprintf(output, maxlen, "OTA,DEFAULT,ERR\r\n");
+                ESP_LOGE(TAG, "Failed to trigger OTA with default URL: %s", esp_err_to_name(ret));
+            }
+        }
+        return;
+    }
+
     /*  未知命令 */
     ESP_LOGE(TAG, "Invalid command");
     snprintf(output, maxlen, "CMD:ERR\r\n");

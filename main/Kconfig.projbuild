@@ -15,18 +15,12 @@ menu "Example Configuration"
             bool "WPA3_ENT"
     endchoice
 
-    if EXAMPLE_WPA2_ENTERPRISE
-        config EXAMPLE_VALIDATE_SERVER_CERT
-            bool "Validate server"
-            default y
-            help
-                Validate the servers' certificate using CA cert.
-    endif
-
-    if !EXAMPLE_WPA2_ENTERPRISE
-        config EXAMPLE_VALIDATE_SERVER_CERT
-            default y
-    endif
+    config EXAMPLE_VALIDATE_SERVER_CERT
+        bool "Validate server"
+        default y
+        help
+            Validate the servers' certificate using CA cert.
+        depends on EXAMPLE_WPA2_ENTERPRISE
 
     config EXAMPLE_EAP_ID
         string "EAP ID"
