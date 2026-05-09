@@ -257,9 +257,10 @@ void RS485_init(void)
     // Set UART pins as per KConfig settings
     ESP_ERROR_CHECK(uart_set_pin(ECHO_UART_PORT, ECHO_TEST_TXD, ECHO_TEST_RXD, ECHO_TEST_RTS, ECHO_TEST_CTS));
 
-    // Set RS485 half duplex mode
-    ESP_ERROR_CHECK(uart_set_mode(uart_num, UART_MODE_RS485_HALF_DUPLEX));
-
+    // Use external auto RS485 transceiver: do NOT set UART RS485 half-duplex
+    // or toggle DE/RE manually; leave UART in normal UART mode so the external
+    // module controls direction automatically.
+    // ESP_ERROR_CHECK(uart_set_mode(uart_num, UART_MODE_RS485_HALF_DUPLEX));
     // Set read timeout of UART TOUT feature
     ESP_ERROR_CHECK(uart_set_rx_timeout(uart_num, ECHO_READ_TOUT));
 
@@ -285,14 +286,9 @@ void RS485_init(void)
 //==================== 发送报文 ====================//
 static void temp_rs485_send(const uint8_t *data, size_t len)
 {
-    gpio_set_level(UART_DE_GPIO, 1);
-    gpio_set_level(UART_RE_GPIO, 1); // 禁止接收器
-
+    // External auto transceiver handles DE/RE. Just write and wait for TX done.
     int ret = uart_write_bytes(ECHO_UART_PORT, (const char *)data, len);
     uart_wait_tx_done(ECHO_UART_PORT, pdMS_TO_TICKS(100));
-
-    gpio_set_level(UART_DE_GPIO, 0);
-    gpio_set_level(UART_RE_GPIO, 0); // 切回接收模式
 
     if (ret != len)
         ESP_LOGW(TAG, "Send incomplete (%d/%d)", ret, (int)len);
@@ -450,6 +446,134 @@ void temp_valve_poll_task(void *arg)
     {
         temp_rs485_read_register(addr, 0x0001, 4);
         vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+
+/*******************************************************************************
+****@brief: 485 通讯测试函数
+****        发送一条 Modbus 读寄存器命令，并接收返回帧
+****@param: addr      从机地址
+****@param: reg       起始寄存器地址
+****@param: num_regs  读取寄存器数量
+****@return: true  成功
+****         false 失败
+********************************************************************************/
+bool temp_rs485_comm_test(uint8_t addr, uint16_t reg, uint16_t num_regs)
+{
+    /* Modbus RTU 读保持寄存器指令:
+       [地址][功能码03][寄存器高][寄存器低][数量高][数量低][CRC低][CRC高]
+    */
+    uint8_t tx_buf[8] = {0};
+    tx_buf[0] = addr;
+    tx_buf[1] = 0x03;
+    tx_buf[2] = (reg >> 8) & 0xFF;
+    tx_buf[3] = reg & 0xFF;
+    tx_buf[4] = (num_regs >> 8) & 0xFF;
+    tx_buf[5] = num_regs & 0xFF;
+
+    /* 计算 CRC */
+    uint16_t crc = temp_MB_CRC16(tx_buf, 6);
+    tx_buf[6] = crc & 0xFF;        // CRC 低字节
+    tx_buf[7] = (crc >> 8) & 0xFF; // CRC 高字节
+
+    ESP_LOGI(TAG, "========== RS485 COMM TEST START ==========");
+    ESP_LOGI(TAG, "SlaveAddr=0x%02X Reg=0x%04X Num=%d", addr, reg, num_regs);
+
+    /* 发送测试命令 */
+    temp_rs485_send(tx_buf, sizeof(tx_buf));
+
+    /* 期望响应长度:
+       地址1 + 功能码1 + 字节数1 + 数据N*2 + CRC2
+    */
+    uint8_t rx_buf[64] = {0};
+    int expected_len = 5 + num_regs * 2;
+    int rx_len = temp_rs485_receive(rx_buf, expected_len, 500);
+
+    /* 基本长度检查 */
+    if (rx_len < 5)
+    {
+        ESP_LOGE(TAG, "RS485 test failed: response too short");
+        return false;
+    }
+
+    /* 校验地址 */
+    if (rx_buf[0] != addr)
+    {
+        ESP_LOGE(TAG, "RS485 test failed: slave addr mismatch, recv=0x%02X", rx_buf[0]);
+        return false;
+    }
+
+    /* 校验功能码
+       正常返回应为 0x03
+       异常返回会变成 0x83
+    */
+    if (rx_buf[1] == (0x03 | 0x80))
+    {
+        ESP_LOGE(TAG, "RS485 test failed: Modbus exception code=0x%02X", rx_buf[2]);
+        return false;
+    }
+
+    if (rx_buf[1] != 0x03)
+    {
+        ESP_LOGE(TAG, "RS485 test failed: function code mismatch, recv=0x%02X", rx_buf[1]);
+        return false;
+    }
+
+    /* CRC 校验 */
+    uint16_t recv_crc = rx_buf[rx_len - 2] | (rx_buf[rx_len - 1] << 8);
+    uint16_t calc_crc = temp_MB_CRC16(rx_buf, rx_len - 2);
+    if (recv_crc != calc_crc)
+    {
+        ESP_LOGE(TAG, "RS485 test failed: CRC error recv=0x%04X calc=0x%04X", recv_crc, calc_crc);
+        return false;
+    }
+
+    /* 字节数检查 */
+    uint8_t byte_count = rx_buf[2];
+    if (byte_count != num_regs * 2)
+    {
+        ESP_LOGW(TAG, "Byte count mismatch: recv=%d expect=%d", byte_count, num_regs * 2);
+    }
+
+    /* 打印解析结果 */
+    for (int i = 0; i < byte_count / 2; i++)
+    {
+        uint16_t value = ((uint16_t)rx_buf[3 + i * 2] << 8) | rx_buf[4 + i * 2];
+        ESP_LOGI(TAG, "Test Read Reg[%d] = %u (0x%04X)", i, value, value);
+    }
+
+    ESP_LOGI(TAG, "========== RS485 COMM TEST PASS ==========");
+    return true;
+}
+
+/*******************************************************************************
+****@brief: RS485 测试任务
+****        上电后初始化 485，然后循环发送读命令测试通讯
+********************************************************************************/
+void temp_rs485_test_task(void *arg)
+{
+    /* 确保 485 已初始化 */
+    RS485_init();
+
+    /* 等设备稳定 */
+    vTaskDelay(pdMS_TO_TICKS(1000));
+
+    while (1)
+    {
+        /* 例子：读取从机 1 的 0x0001 开始的 2 个寄存器 */
+        bool ok = temp_rs485_comm_test(0x01, 0x0001, 2);
+
+        if (ok)
+        {
+            ESP_LOGI(TAG, "RS485 communication normal");
+        }
+        else
+        {
+            ESP_LOGW(TAG, "RS485 communication abnormal");
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 

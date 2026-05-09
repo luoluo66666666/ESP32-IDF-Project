@@ -516,7 +516,7 @@ void wifi_protocol_task(void *param)
 
             memset(response, 0, sizeof(response));
 
-            /* 🔴 完全不改你的协议 */
+            /*  完全不改你的协议 */
             ctrl_protocol((char *)rx.buf,
                           response,
                           sizeof(response));

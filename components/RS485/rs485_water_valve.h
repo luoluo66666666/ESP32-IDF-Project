@@ -9,6 +9,7 @@ void temp_test_sequence(void);
 void RS485_init(void);
 void temp_rs485_task(void);
 
-void temp_valve_read_status(uint8_t addr);
+bool temp_rs485_comm_test(uint8_t addr, uint16_t reg, uint16_t num_regs);
+void temp_rs485_test_task(void *arg);
 
 #endif
