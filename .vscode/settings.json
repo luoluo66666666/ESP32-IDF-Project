@@ -71,5 +71,6 @@
   ],
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
-  ]
+  ],
+  "idf.currentSetup": "d:\\ESP-IDF\\esp-idf-v5.4.2"
 }

@@ -1,8 +1,11 @@
 idf_component_register(
     SRCS
-        "modbus.c"
+        "src/modbus_master.c"
+        "src/massage_chair.c"
+        "src/inverter.c"
+        "src/temp.c"
     INCLUDE_DIRS
-        "."
+        "include"
         "${CMAKE_SOURCE_DIR}/managed_components/espressif__esp-modbus/modbus/mb_controller/common/include"
     REQUIRES
         driver

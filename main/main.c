@@ -85,6 +85,7 @@ void app_main(void)
 {
     // pin_init();
     ctrl_protocol_init(); // Initialize the control protocol
+    modbus_init();
     // Wifi_task();          // 启动wifi模块
     // wifi_tcp_start();
     // wifi_ota_mode_start("http://192.168.1.125:8080/ESP-wash.bin");
@@ -96,7 +97,7 @@ void app_main(void)
     // temp_rs485_task();   //恒温宝心跳包
     // xTaskCreate(temp_rs485_test_task, "rs485_test", 4096, NULL, 8, NULL);
     // // 创建控制任务
-    xTaskCreate(modbus_test_task, "modbus_test_task", 4096, NULL, 8, NULL);
+    // xTaskCreate(modbus_test_task, "modbus_test_task", 4096, NULL, 8, NULL);
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }

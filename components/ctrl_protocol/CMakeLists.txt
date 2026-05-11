@@ -1,10 +1,11 @@
 idf_component_register(
-    SRCS 
+    SRCS
         "ctrl.c"
-    INCLUDE_DIRS 
+    INCLUDE_DIRS
         "include"
-    REQUIRES 
-        "mode_ctrl" 
+    REQUIRES
+        "mode_ctrl"
+        "modbus"
         "RS485"
         "OTA"
 )
