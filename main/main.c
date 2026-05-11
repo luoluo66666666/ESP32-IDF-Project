@@ -9,6 +9,7 @@
 #include "mode_ctrl.h"
 #include <esp_log.h>
 #include "rs485_water_valve.h"
+#include "modbus.h"
 
 static const char *TAG = "current MODE";
 
@@ -92,9 +93,10 @@ void app_main(void)
     // Temp_task();
     // Temp_task();
     // sensor_init();
-    temp_rs485_task();   //恒温宝心跳包
+    // temp_rs485_task();   //恒温宝心跳包
     // xTaskCreate(temp_rs485_test_task, "rs485_test", 4096, NULL, 8, NULL);
     // // 创建控制任务
+    xTaskCreate(modbus_test_task, "modbus_test_task", 4096, NULL, 8, NULL);
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 }

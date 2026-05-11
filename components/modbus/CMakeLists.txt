@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS
+        "modbus.c"
+    INCLUDE_DIRS
+        "."
+        "${CMAKE_SOURCE_DIR}/managed_components/espressif__esp-modbus/modbus/mb_controller/common/include"
+    REQUIRES
+        driver
+        espressif__esp-modbus
+)
