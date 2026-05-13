@@ -1,0 +1,55 @@
+0 verbose cli C:\Program Files\nodejs\node.exe C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js
+1 info using npm@10.8.2
+2 info using node@v20.20.2
+3 silly config load:file:C:\Program Files\nodejs\node_modules\npm\npmrc
+4 silly config load:file:E:\Work\Projects\ESP-wash\.npmrc
+5 silly config load:file:C:\Users\pc\.npmrc
+6 silly config load:file:C:\Users\pc\AppData\Roaming\npm\etc\npmrc
+7 verbose title npm exec create-expo-app@latest mobile-debug-app --template blank-typescript
+8 verbose argv "exec" "--" "create-expo-app@latest" "mobile-debug-app" "--template" "blank-typescript"
+9 verbose logfile logs-max:10 dir:E:\Work\Projects\ESP-wash\.npm-cache\_logs\2026-05-13T09_50_52_522Z-
+10 verbose logfile E:\Work\Projects\ESP-wash\.npm-cache\_logs\2026-05-13T09_50_52_522Z-debug-0.log
+11 silly logfile done cleaning log files
+12 silly packumentCache heap:4345298944 maxSize:1086324736 maxEntrySize:543162368
+13 http fetch GET https://registry.npmjs.org/create-expo-app attempt 1 failed with EACCES
+14 http fetch GET https://registry.npmjs.org/npm attempt 1 failed with EACCES
+15 http fetch GET https://registry.npmjs.org/create-expo-app attempt 2 failed with EACCES
+16 http fetch GET https://registry.npmjs.org/npm attempt 2 failed with EACCES
+17 http fetch GET https://registry.npmjs.org/create-expo-app attempt 3 failed with EACCES
+18 http fetch GET https://registry.npmjs.org/npm attempt 3 failed with EACCES
+19 verbose type system
+20 verbose stack FetchError: request to https://registry.npmjs.org/create-expo-app failed, reason: 
+20 verbose stack     at ClientRequest.<anonymous> (C:\Program Files\nodejs\node_modules\npm\node_modules\minipass-fetch\lib\index.js:130:14)
+20 verbose stack     at ClientRequest.emit (node:events:524:28)
+20 verbose stack     at emitErrorEvent (node:_http_client:101:11)
+20 verbose stack     at _destroy (node:_http_client:884:9)
+20 verbose stack     at onSocketNT (node:_http_client:904:5)
+20 verbose stack     at process.processTicksAndRejections (node:internal/process/task_queues:83:21)
+21 error code EACCES
+22 error errno EACCES
+23 error FetchError: request to https://registry.npmjs.org/create-expo-app failed, reason: 
+23 error     at ClientRequest.<anonymous> (C:\Program Files\nodejs\node_modules\npm\node_modules\minipass-fetch\lib\index.js:130:14)
+23 error     at ClientRequest.emit (node:events:524:28)
+23 error     at emitErrorEvent (node:_http_client:101:11)
+23 error     at _destroy (node:_http_client:884:9)
+23 error     at onSocketNT (node:_http_client:904:5)
+23 error     at process.processTicksAndRejections (node:internal/process/task_queues:83:21) {
+23 error   code: 'EACCES',
+23 error   errno: 'EACCES',
+23 error   type: 'system'
+23 error }
+24 error
+24 error The operation was rejected by your operating system.
+24 error It's possible that the file was already in use (by a text editor or antivirus),
+24 error or that you lack permissions to access it.
+24 error
+24 error If you believe this might be a permissions issue, please double-check the
+24 error permissions of the file and its containing directories, or try running
+24 error the command again as root/Administrator.
+25 verbose cwd E:\Work\Projects\ESP-wash
+26 verbose os Windows_NT 10.0.26100
+27 verbose node v20.20.2
+28 verbose npm  v10.8.2
+29 verbose exit 1
+30 verbose code 1
+31 error A complete log of this run can be found in: E:\Work\Projects\ESP-wash\.npm-cache\_logs\2026-05-13T09_50_52_522Z-debug-0.log

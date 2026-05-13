@@ -26,22 +26,14 @@ esp_err_t massage_chair_set_mode(massage_mode_t mode)
     return modbus_write_single_register(MASSAGE_CHAIR_SLAVE_ADDR, MASSAGE_MODE_REG, (uint16_t)mode);
 }
 
-/* 设置按摩椅低力度 */
-esp_err_t massage_chair_set_strength_low(void)
+/* 设置按摩椅力度 */
+esp_err_t massage_chair_set_strength(massage_strength_t strength)
 {
-    return modbus_write_single_register(MASSAGE_CHAIR_SLAVE_ADDR, MASSAGE_MODE_REG, 0x0002);
-}
+    if (strength > MASSAGE_STRENGTH_HIGH) {
+        return ESP_ERR_INVALID_ARG;
+    }
 
-/* 设置按摩椅中力度 */
-esp_err_t massage_chair_set_strength_medium(void)
-{
-    return modbus_write_single_register(MASSAGE_CHAIR_SLAVE_ADDR, MASSAGE_STRENGTH_REG, 0x0001);
-}
-
-/* 设置按摩椅高力度 */
-esp_err_t massage_chair_set_strength_high(void)
-{
-    return modbus_write_single_register(MASSAGE_CHAIR_SLAVE_ADDR, MASSAGE_STRENGTH_REG, 0x0002);
+    return modbus_write_single_register(MASSAGE_CHAIR_SLAVE_ADDR, MASSAGE_STRENGTH_REG, (uint16_t)strength);
 }
 
 /* 按摩椅测试任务 */
@@ -56,7 +48,7 @@ void massage_chair_test_task(void *arg)
         }
         vTaskDelay(pdMS_TO_TICKS(3000));
 
-        err = massage_chair_set_strength_medium();
+        err = massage_chair_set_strength(MASSAGE_STRENGTH_MEDIUM);
         if (err == ESP_OK) {
             ESP_LOGI(TAG, "set medium strength ok");
         } else {

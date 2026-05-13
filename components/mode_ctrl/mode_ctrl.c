@@ -53,6 +53,14 @@ static const char *FLOW = "flow_sensor";
 
 // ================== 全局定义 ==================
 #define TAG "SENSOR"
+#define IO_DEBUG_ENABLE 0
+
+#if IO_DEBUG_ENABLE
+#define IO_LOGI(...) ESP_LOGI(TAG, __VA_ARGS__)
+#else
+#define IO_LOGI(...)
+#endif
+
 #define VREF 3300
 #define R_FIXED 50000.0f  // 分压电阻
 #define ALPHA 0.2f        // 指数滤波系数
@@ -328,7 +336,7 @@ int set_do_pin(int index, int level)
     }
 
     // 4. 打印GPIO开启的日志
-    ESP_LOGI(TAG, "set_do_pin: Set DO%d (GPIO%d) to level %d", index, do_pin[index], level);
+    IO_LOGI("set_do_pin: Set DO%d (GPIO%d) to level %d", index, do_pin[index], level);
     return 0; // 成功返回
 }
 
@@ -366,7 +374,7 @@ int get_do_pin(int index)
     // 读取对应 GPIO 引脚的输出寄存器电平
     int level = get_output_reg_level(do_pin[index]);
 
-    ESP_LOGI(TAG, "get_do_pin: Returning DO%d (GPIO%d), level: %d", index, do_pin[index], level);
+    IO_LOGI("get_do_pin: Returning DO%d (GPIO%d), level: %d", index, do_pin[index], level);
     return level;
 }
 
@@ -387,7 +395,7 @@ int get_di_pin(int index)
     // 读取对应 GPIO 引脚的输入电平
     int level = gpio_get_level(di_pin[index]);
 
-    ESP_LOGI(TAG, "get_di_pin: Returning DI%d (GPIO%d), level: %d", index, di_pin[index], level);
+    IO_LOGI("get_di_pin: Returning DI%d (GPIO%d), level: %d", index, di_pin[index], level);
     return level;
 }
 

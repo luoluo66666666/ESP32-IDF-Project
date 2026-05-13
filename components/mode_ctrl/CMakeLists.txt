@@ -6,6 +6,7 @@ idf_component_register(
         "mode2.c"
         "mode3.c"
         "mode4.c"
+        "mode4_zhongyao_v2.c"
         "mode5.c"
         "mode_test.c"
     INCLUDE_DIRS
@@ -14,5 +15,6 @@ idf_component_register(
         driver
         ctrl_protocol
         esp_adc
+        modbus
         My_Bt
 )

@@ -209,7 +209,7 @@ esp_err_t modbus_write_multiple_registers(uint8_t slave_addr, uint16_t reg_start
     return err;
 }
 
-/* Modbus 通讯测试 */
+/* Modbus 通信测试 */
 bool modbus_comm_test(uint8_t slave_addr, uint16_t reg_start, uint16_t reg_count)
 {
     if (reg_count == 0 || reg_count > 32) {

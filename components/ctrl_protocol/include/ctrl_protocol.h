@@ -1,4 +1,4 @@
-#ifndef __CTRL_PROTOCOL_H__
+﻿#ifndef __CTRL_PROTOCOL_H__
 #define __CTRL_PROTOCOL_H__
 
 #include <stdbool.h>
@@ -23,6 +23,7 @@
 #define RUN_BIT BIT10
 #define FAULT_BIT BIT11
 #define Motor_Finsh_BIT BIT12
+#define MODE_STOP_BIT BIT13
 
 void ctrl_protocol_init(void);
 void ctrl_protocol(char *input, char *output, int maxlen);
@@ -33,8 +34,12 @@ bool get_run_status(void);
 int get_mode_status(void);
 int set_mode(int mode);
 int check_status(void);
+bool mode_stop_requested(void);
+void request_mode_stop(void);
+void clear_mode_stop_request(void);
 
 int motor_run(void);
 int motor_stop(void);
+int motor_finish(void);
 
 #endif

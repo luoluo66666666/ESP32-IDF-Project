@@ -91,6 +91,7 @@ int mode1(void);
 int mode2(void);
 int mode3(void);
 int mode4(void);
+int mode4_zhongyao_v2(void);
 int mode5_up(void);
 int mode5_down(void);
 void test_task(void *pvParameters);
