@@ -107,7 +107,7 @@ void app_main(void)
         ESP_LOGE(TAG, "temp default init failed: %s", esp_err_to_name(err));
     }
     // Wifi_task();          // 启动 WiFi 模块
-    // wifi_tcp_start();
+    wifi_tcp_start();
     // wifi_ota_mode_start("http://192.168.1.125:8080/ESP-wash.bin");
 
     ble_task(); // 启动 BLE 任务

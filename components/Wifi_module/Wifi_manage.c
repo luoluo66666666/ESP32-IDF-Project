@@ -400,14 +400,14 @@ void tcp_client_task(void *param)
 
     while (1)
     {
-        /* 1️⃣ 等 WiFi */
+        /* 等 WiFi */
         xEventGroupWaitBits(wifi_event_group,
                             WIFI_CONNECTED_BIT,
                             false,
                             true,
                             portMAX_DELAY);
 
-        /* 2️⃣ 建立 socket */
+        /* 建立 socket */
         int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
         if (sock < 0)
         {
@@ -431,7 +431,7 @@ void tcp_client_task(void *param)
 
         ESP_LOGI(TAG, "TCP connected");
 
-        /* 3️⃣ 发送 REG */
+        /* 发送 REG */
         char reg[64];
         snprintf(reg, sizeof(reg),
                  "REG|%s|1.0.0\n", device_sn);
