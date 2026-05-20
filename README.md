@@ -1,85 +1,171 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-C5 | ESP32-C6 | ESP32-C61 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- | --------- | -------- | -------- |
+# ESP-Wash
 
-# WPA2 Enterprise Example
+ESP-Wash is an ESP32-S3 device project with three control/configuration paths:
 
-This example shows how ESP32 connects to AP with Wi-Fi enterprise encryption using the EAP-FAST method. The example does the following steps:
+- BLE
+- Local Wi-Fi AP + local TCP
+- STA Wi-Fi + upstream TCP server
 
-1. Install CA certificate which is optional.
-2. Set user name and password and identity.
-3. Set the PAC file which may be empty.
-4. Enable WiFi enterprise mode.
-5. Connect to AP.
+## Local Config Mode
 
-*Note:*
-1. EAP-FAST is not supported with `CONFIG_ESP_WIFI_MBEDTLS_TLS_CLIENT` and so is disabled by default.
-2. Setting the config `fast_provisioning` to methods 0 and 1 do not support saving the PAC credentials in case of a restart or loss of power.
-3. The certificates present in the `examples/wifi/wifi_eap_fast/main` folder contain server certificates which have the corresponding CA as well. These can be used for server validation which is opptional.
-4. The expiration date of these certificates is 2027/06/05.
+On boot, the device starts in AP config mode by default:
 
-### Configuration
+- AP SSID: `ESP-WASH`
+- AP password: `12345678`
+- Local TCP server: `192.168.4.1:9000`
 
-```
-idf.py menuconfig
-```
-* Set SSID of Access Point to connect in Example Configuration.
-* Enter EAP-ID.
-* Enter Username and Password.
-* Enable or disable Validate Server option.
+In this mode, a phone can connect to the device hotspot and send commands locally.
 
-### Build and Flash the project.
+## STA Work Mode
 
-```
-idf.py -p PORT flash monitor
-```
+After `SYS:MODE=STA`, the device switches to STA work mode:
 
-### Example output
+- The local AP/TCP config path is closed
+- The device connects to the configured router SSID/password
+- Then the device connects to the configured upstream TCP server
 
-Here is an example of wpa2 enterprise (FAST method) console output.
-```
-I (690) example: Setting WiFi configuration SSID wpa2_test...
-I (690) phy_init: phy_version 4670,719f9f6,Feb 18 2021,17:07:07
-I (800) wifi:mode : sta (24:6f:28:80:41:78)
-I (800) wifi:enable tsf
-I (1410) wifi:new:<6,0>, old:<1,0>, ap:<255,255>, sta:<6,0>, prof:1
-I (2410) wifi:state: init -> auth (b0)
-I (2420) wifi:state: auth -> assoc (0)
-E (2420) wifi:Association refused temporarily, comeback time 3072 mSec
-I (5500) wifi:state: assoc -> assoc (0)
-I (5500) wifi:state: assoc -> init (6c0)
-I (5500) wifi:new:<6,0>, old:<6,0>, ap:<255,255>, sta:<6,0>, prof:1
-I (7560) wifi:new:<6,0>, old:<6,0>, ap:<255,255>, sta:<6,0>, prof:1
-I (7560) wifi:state: init -> auth (b0)
-I (7560) wifi:state: auth -> assoc (0)
-I (7570) wifi:state: assoc -> run (10)
-I (7770) wifi:connected with wpa2_test, aid = 1, channel 6, BW20, bssid = 24:4b:fe:ab:be:99
-I (7770) wifi:security: WPA2-ENT, phy: bg, rssi: -80
-I (7780) wifi:pm start, type: 1
+If the STA Wi-Fi connection does not succeed within about 30 seconds, the device rolls back to the previous config and returns to AP config mode.
 
-I (7800) example: ~~~~~~~~~~~
-I (7800) example: IP:0.0.0.0
-I (7800) example: MASK:0.0.0.0
-I (7800) example: GW:0.0.0.0
-I (7800) example: ~~~~~~~~~~~
-I (7870) wifi:AP's beacon interval = 102400 us, DTIM period = 1
-I (8580) esp_netif_handlers: sta ip: 192.168.5.3, mask: 255.255.255.0, gw: 192.168.5.1
-I (12800) example: ~~~~~~~~~~~
-I (12800) example: IP:192.168.5.3
-I (12800) example: MASK:255.255.255.0
-I (12800) example: GW:192.168.5.1
-I (12800) example: ~~~~~~~~~~~
+## Command Paths
+
+- `CMD:*` business commands can be sent by BLE or local TCP
+- `CFG:*` updates configuration values
+- `SYS:*` switches operating mode and reports network status
+
+## Local TCP Usage
+
+1. Connect the phone to `ESP-WASH`
+2. Open a TCP connection to `192.168.4.1:9000`
+3. Send commands such as:
+
+```text
+CMD:MODE0
+CFG:GET
 ```
 
-###分区表设置
-# Name,        Type, SubType,   Offset,    Size,    Flags
-nvs,           data, nvs,       0x9000,    0x6000,  # 基础 NVS（系统用）
-phy_init,      data, phy,       0xF000,    0x1000,  # WiFi/蓝牙 PHY 数据
-factory,       app,  factory,   0x10000,   0x180000, # 新增：出厂分区（1.5MB）
-ota_0,         app,  ota_0,     0x190000,  0x180000, # OTA 分区1（顺延地址）
-ota_1,         app,  ota_1,     0x310000,  0x180000, # OTA 分区2（顺延地址）
-spiffs,        data, spiffs,    0x490000,  0xE0000,  # SPIFFS 文件系统（顺延）
-device_nvs,    data, nvs,       0x570000,  0x6000,   # 自定义 NVS（设备配置）
-nvs_key,       data, nvs_keys,  0x576000,  0x1000    # NVS 密钥（顺延）
+The local TCP server accepts both:
 
-###OTA升级
-本地使用终端输入python -m http.server 8080直接建立端口,ota那边使用wifi联网再接入对应的端口
+- newline-terminated commands
+- single packet commands without `\n`
+
+## Configuration Commands
+
+### Read current config
+
+```text
+CFG:GET
+```
+
+Example response:
+
+```text
+CFG:GET,SSID=your_wifi,WIFI_PASSWORD=your_password,SERVER_IP=192.168.1.125,SERVER_PORT=9000
+```
+
+### Set target router SSID
+
+```text
+CFG:WIFI_SSID=your_wifi_name
+```
+
+### Set target router password
+
+```text
+CFG:WIFI_PASSWORD=your_wifi_password
+```
+
+### Set upstream TCP server IP
+
+```text
+CFG:SERVER_IP=192.168.1.125
+```
+
+### Set upstream TCP server port
+
+```text
+CFG:SERVER_PORT=9000
+```
+
+### Save config only
+
+```text
+CFG:SAVE
+```
+
+This writes the current config to `device_nvs`, but does not switch modes immediately.
+
+### Switch to STA work mode
+
+```text
+SYS:MODE=STA
+```
+
+This will:
+
+1. Save the current config to NVS if needed
+2. Leave AP config mode
+3. Switch to STA work mode
+4. Connect to the configured Wi-Fi router
+5. Connect to the configured TCP server
+
+### Return to AP config mode
+
+```text
+SYS:MODE=AP
+```
+
+This command switches the device back to AP config mode.
+
+### Query network mode/status
+
+```text
+SYS:STATUS
+```
+
+Example response:
+
+```text
+SYS:STATUS,MODE=AP,STA=DISCONNECTED,TCP=DISCONNECTED,TRIAL=IDLE
+```
+
+## Recommended Config Flow
+
+1. Connect phone to `ESP-WASH`
+2. Connect TCP to `192.168.4.1:9000`
+3. Send:
+
+```text
+CFG:WIFI_SSID=your_router
+CFG:WIFI_PASSWORD=your_password
+CFG:SERVER_IP=192.168.1.125
+CFG:SERVER_PORT=9000
+CFG:SAVE
+SYS:MODE=STA
+```
+
+4. The device switches to STA work mode
+5. If connect fails, wait about 30 seconds for auto rollback
+6. Reconnect phone to `ESP-WASH` and continue configuration if needed
+
+## Notes
+
+- ESP32 can only connect to `2.4 GHz` Wi-Fi
+- `CFG:WIFI_SSID` / `CFG:WIFI_PASSWORD` configure the router the device will join as STA
+- They do not change the SoftAP name `ESP-WASH`
+- The local AP/TCP path is for configuration/debug in AP config mode
+- For best results, use BLE for `SYS:MODE=STA` / `SYS:MODE=AP` mode switching
+
+## Build
+
+```bash
+idf.py build
+idf.py -p <PORT> flash monitor
+```
+
+## Partition Notes
+
+The project uses a dedicated `device_nvs` partition to store:
+
+- device SN
+- router SSID/password
+- upstream server IP/port

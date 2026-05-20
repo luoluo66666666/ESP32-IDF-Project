@@ -11,6 +11,7 @@
 #include "Http_ota.h"
 #include "modbus.h"
 #include "mode_ctrl.h"
+#include "Wifi_module.h"
 
 extern EventGroupHandle_t event_ctrl_protocol;
 extern int do_pin[26];
@@ -35,6 +36,28 @@ static const mode_cmd_t s_mode_commands[] = {
 };
 
 #define MODE_CMD_COUNT (sizeof(s_mode_commands) / sizeof(s_mode_commands[0]))
+
+static void trim_command(char *input)
+{
+    size_t len = 0;
+
+    if (input == NULL)
+    {
+        return;
+    }
+
+    len = strlen(input);
+    while (len > 0)
+    {
+        char ch = input[len - 1];
+        if (ch != '\r' && ch != '\n' && ch != ' ' && ch != '\t')
+        {
+            break;
+        }
+        input[len - 1] = '\0';
+        len--;
+    }
+}
 
 static void stop_all_do_outputs(void)
 {
@@ -717,7 +740,11 @@ void ctrl_protocol_init(void)
 /* 控制协议入口 */
 void ctrl_protocol(char *input, char *output, int maxlen)
 {
+    trim_command(input);
     ESP_LOGI(TAG, "Received command: %s", input);
+
+    if (wifi_module_handle_config_command(input, output, maxlen))
+        return;
 
     if (handle_mode_query(input, output, maxlen))
         return;

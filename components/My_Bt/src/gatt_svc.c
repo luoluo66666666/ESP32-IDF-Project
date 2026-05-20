@@ -10,7 +10,6 @@
 // #include "uart_module.h"
 
 #include "ctrl_protocol.h" // Include the ctrl_protocol header for ctrl_protocol functions
-
 char response[QUEUE_ITEM_SIZE];
 
 /* --------------------------- 定义是否启用 BLE 加密访问 --------------------------- */
@@ -275,6 +274,7 @@ static int data_access(uint16_t conn_handle, uint16_t attr_handle,
 void ble_send_task(void *param)
 {
     ble_data_t data;
+    const uint16_t notify_chunk_size = 20;
     while (1)
     {
         // 只有在客户端订阅(characteristic notify)后，custom_notify_enabled 才为 true
@@ -284,21 +284,39 @@ void ble_send_task(void *param)
             if (xQueueReceive(ble_tx_queue, &data, portMAX_DELAY) == pdTRUE)
             {
                 // 分配 os_mbuf 缓冲区，用于封装要发送的数据
-                struct os_mbuf *om = ble_hs_mbuf_from_flat(data.buf, data.len);
-                if (om == NULL)
+                size_t offset = 0;
+                bool notify_failed = false;
+
+                while (offset < data.len)
                 {
-                    ESP_LOGE(TAG, "Failed to allocate mbuf");
-                    continue; // 分配失败则跳过本次循环
+                    uint16_t chunk_len = (uint16_t)(data.len - offset);
+                    if (chunk_len > notify_chunk_size)
+                    {
+                        chunk_len = notify_chunk_size;
+                    }
+
+                    struct os_mbuf *om = ble_hs_mbuf_from_flat(data.buf + offset, chunk_len);
+                    if (om == NULL)
+                    {
+                        ESP_LOGE(TAG, "Failed to allocate mbuf");
+                        notify_failed = true;
+                        break;
+                    }
+
+                    int rc = ble_gatts_notify_custom(custom_chr_conn_handle,
+                                                     my_custom_chr_val_handle, om);
+                    if (rc != 0)
+                    {
+                        ESP_LOGE(TAG, "Notify send failed, rc=%d", rc);
+                        notify_failed = true;
+                        break;
+                    }
+
+                    offset += chunk_len;
+                    vTaskDelay(pdMS_TO_TICKS(15));
                 }
 
-                // 通过自定义特征值发送通知给客户端
-                int rc = ble_gatts_notify_custom(custom_chr_conn_handle,
-                                                 my_custom_chr_val_handle, om);
-                if (rc != 0)
-                {
-                    ESP_LOGE(TAG, "Notify send failed, rc=%d", rc);
-                }
-                else
+                if (!notify_failed)
                 {
                     ESP_LOGI(TAG, "Notify sent: %.*s", (int)data.len, data.buf);
                 }
@@ -332,6 +350,9 @@ void ble_receive_task(void *param)
 
             // 调用协议解析函数，生成响应数据（写入 response 缓冲区）
             memset(response, 0, sizeof(response));
+            data.buf[(data.len < QUEUE_ITEM_SIZE) ? data.len : (QUEUE_ITEM_SIZE - 1)] = '\0';
+
+            // BLE 和 TCP 统一复用同一套 CFG:* 配置命令逻辑。
             ctrl_protocol((char *)data.buf, response, sizeof(response));
 
             // 如果协议处理有输出（response 非空），则放入发送队列

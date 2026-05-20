@@ -11,8 +11,8 @@
 extern QueueHandle_t ble_tx_queue;
 
 int do_pin[] = {
-    GPIO_NUM_1,
-    GPIO_NUM_2,
+    GPIO_NUM_1, // do_pin[0]
+    GPIO_NUM_2, // do_pin[1]
     GPIO_NUM_42,
     GPIO_NUM_41,
     GPIO_NUM_40,
@@ -40,8 +40,8 @@ int do_pin[] = {
 };
 
 int di_pin[] = {
-    GPIO_NUM_4,
-    GPIO_NUM_5,
+    GPIO_NUM_4, // di_pin[0]
+    GPIO_NUM_5, // di_pin[1]
     GPIO_NUM_6,
     GPIO_NUM_7,
     GPIO_NUM_15,

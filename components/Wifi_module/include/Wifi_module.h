@@ -1,4 +1,5 @@
 #include <esp_event_base.h>
+#include "stdbool.h"
 
 void wifi_event_handler(void* arg, esp_event_base_t event_base,
                                int32_t event_id, void* event_data);
@@ -10,6 +11,7 @@ void wifi_module_queue_init(void);
 void mywifi_log(const char *fmt, ...);
 
 void wifi_tcp_start(void);
+bool wifi_module_handle_config_command(const char *input, char *output, int maxlen);
 
 /**
  * OTA 专用 WiFi 入口（更友好的 OTA 模式接口）
