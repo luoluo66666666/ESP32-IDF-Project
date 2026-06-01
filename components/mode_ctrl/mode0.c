@@ -11,7 +11,6 @@ static const char *TAG = "MODE0";
 #define Motor_STOP_BIT BIT8
 #define Motor_GET_BIT BIT9
 
-extern int do_pin[26];
 extern int di_pin[6];
 
 #define POLE_EVENT_BIT (1 << 0)

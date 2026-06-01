@@ -54,15 +54,15 @@ menu "Example Configuration"
 
     config ECHO_UART_TXD
         int "UART TX Pin"
-        default 23
+        default 11
         help
-            TX GPIO pin number for RS485 communication.
+            TX to MAX3485 DI. PCB net MCU_TXD = GPIO11. Do not use as DO.
 
     config ECHO_UART_RXD
         int "UART RX Pin"
-        default 22
+        default 12
         help
-            RX GPIO pin number for RS485 communication.
+            RX from MAX3485 RO. PCB net MCU_RXD = GPIO12. Do not use as DO.
 
     config ECHO_UART_RTS
         int "UART RTS Pin"

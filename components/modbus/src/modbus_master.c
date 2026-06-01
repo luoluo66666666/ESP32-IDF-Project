@@ -1,5 +1,6 @@
 #include <stdio.h>
 
+#include "driver/gpio.h"
 #include "driver/uart.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -15,7 +16,7 @@
 #define MODBUS_UART_RXD (CONFIG_ECHO_UART_RXD)
 #define MODBUS_UART_RTS (CONFIG_ECHO_UART_RTS)
 #define MODBUS_UART_BAUD (CONFIG_ECHO_UART_BAUD_RATE)
-#define MODBUS_RESPONSE_TIMEOUT_MS 1000
+#define MODBUS_RESPONSE_TIMEOUT_MS 2000
 
 static void *s_master_handle = NULL;
 static SemaphoreHandle_t s_modbus_mutex = NULL;
@@ -82,17 +83,33 @@ esp_err_t modbus_init(void)
         return err;
     }
 
-    err = uart_set_pin(MODBUS_UART_PORT, MODBUS_UART_TXD, MODBUS_UART_RXD,
-                       MODBUS_UART_RTS, UART_PIN_NO_CHANGE);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "uart_set_pin failed: %s", esp_err_to_name(err));
-        mbc_master_delete(s_master_handle);
-        s_master_handle = NULL;
-        modbus_unlock();
-        return err;
-    }
+    gpio_reset_pin((gpio_num_t)MODBUS_UART_TXD);
+    gpio_reset_pin((gpio_num_t)MODBUS_UART_RXD);
 
-    err = uart_set_mode(MODBUS_UART_PORT, UART_MODE_RS485_HALF_DUPLEX);
+    if (MODBUS_UART_RTS >= 0) {
+        err = uart_set_pin(MODBUS_UART_PORT, MODBUS_UART_TXD, MODBUS_UART_RXD,
+                           MODBUS_UART_RTS, UART_PIN_NO_CHANGE);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "uart_set_pin failed: %s", esp_err_to_name(err));
+            mbc_master_delete(s_master_handle);
+            s_master_handle = NULL;
+            modbus_unlock();
+            return err;
+        }
+        err = uart_set_mode(MODBUS_UART_PORT, UART_MODE_RS485_HALF_DUPLEX);
+    } else {
+        /* 自动收发 MAX3485：RTS/DE 不接 ESP，TX/RX 必须用非 do_pin 的 GPIO */
+        err = uart_set_pin(MODBUS_UART_PORT, MODBUS_UART_TXD, MODBUS_UART_RXD,
+                           UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "uart_set_pin failed: %s", esp_err_to_name(err));
+            mbc_master_delete(s_master_handle);
+            s_master_handle = NULL;
+            modbus_unlock();
+            return err;
+        }
+        err = uart_set_mode(MODBUS_UART_PORT, UART_MODE_UART);
+    }
     if (err != ESP_OK) {
         ESP_LOGE(TAG, "uart_set_mode failed: %s", esp_err_to_name(err));
         mbc_master_delete(s_master_handle);
@@ -111,8 +128,14 @@ esp_err_t modbus_init(void)
     }
 
     s_modbus_initialized = true;
-    ESP_LOGI(TAG, "master started on UART%d tx=%d rx=%d rts=%d baud=%d",
-             MODBUS_UART_PORT, MODBUS_UART_TXD, MODBUS_UART_RXD, MODBUS_UART_RTS, MODBUS_UART_BAUD);
+    if (MODBUS_UART_RTS >= 0) {
+        ESP_LOGI(TAG, "Modbus UART%d TX=%d RX=%d RTS=%d (half-duplex) baud=%d",
+                 MODBUS_UART_PORT, MODBUS_UART_TXD, MODBUS_UART_RXD,
+                 MODBUS_UART_RTS, MODBUS_UART_BAUD);
+    } else {
+        ESP_LOGI(TAG, "Modbus UART%d TX=%d RX=%d auto-485 baud=%d (RTS not used)",
+                 MODBUS_UART_PORT, MODBUS_UART_TXD, MODBUS_UART_RXD, MODBUS_UART_BAUD);
+    }
     modbus_unlock();
     return ESP_OK;
 }

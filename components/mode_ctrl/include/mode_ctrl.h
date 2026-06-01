@@ -76,8 +76,10 @@ static inline void delay_1s(void)
 static uint8_t last_di = 0;
 static uint8_t cur_di = 0;
 
+#define DO_PIN_NUM 28
+
 /* 公用函数声明 */
-extern int do_pin[];
+extern int do_pin[DO_PIN_NUM];
 
 esp_err_t pin_init(void);
 esp_err_t sensor_init(void);

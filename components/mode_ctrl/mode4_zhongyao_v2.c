@@ -19,7 +19,6 @@ static const char *TAG = "MODE4_V2";
 #define MODE4_LOGI(...)
 #endif
 
-extern int do_pin[26];
 extern int di_pin[6];
 
 /* 初始化彩灯引脚 */

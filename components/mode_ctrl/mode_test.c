@@ -11,7 +11,6 @@ static const char *TAG = "MODE_TEST";
 #define Motor_STOP_BIT BIT8
 #define Motor_GET_BIT BIT9
 
-extern int do_pin[26];
 extern int di_pin[6];
 extern uint8_t last_di;
 extern uint8_t cur_di;

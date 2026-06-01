@@ -10,42 +10,59 @@
 
 extern QueueHandle_t ble_tx_queue;
 
-int do_pin[] = {
-    GPIO_NUM_1, // do_pin[0]
-    GPIO_NUM_2, // do_pin[1]
-    GPIO_NUM_42,
-    GPIO_NUM_41,
-    GPIO_NUM_40,
-    GPIO_NUM_39,
-    GPIO_NUM_38,
-    GPIO_NUM_37,
-    GPIO_NUM_36,
-    GPIO_NUM_35,
-    GPIO_NUM_0,
-    GPIO_NUM_45,
-    GPIO_NUM_48,
-    GPIO_NUM_47,
-    GPIO_NUM_21,
-    GPIO_NUM_14,
-    GPIO_NUM_13,
-    GPIO_NUM_12,
-    GPIO_NUM_11,
-    GPIO_NUM_10,
-    GPIO_NUM_9,
-    GPIO_NUM_46,
-    GPIO_NUM_3,
-    GPIO_NUM_8,
-    GPIO_NUM_18,
-    GPIO_NUM_17,
+/*
+ * DO 映射表（软件下标 do_pin[0..27] ↔ 板级 MCU_DO_xx ↔ GPIO，共 DO_PIN_NUM 路）
+ * 控制接口：TURN_ON(n) / TURN_OFF(n) / set_do_pin(n, level)，n 为下标，非丝印 DO 号。
+ *
+ * RS485（Modbus，自动收发 MAX3485，sdkconfig）：
+ *   MCU_TXD = GPIO11，MCU_RXD = GPIO12（与 do_pin[18]/[17] 同脚，Modbus 初始化后会切 UART 功能）
+ *
+ * 其它：
+ *   GPIO19 = 彩灯（mode4，不在本表）
+ *   GPIO3/8  板级为 MCU_SPEAKER_STOP / MCU_SPEAKER_START
+ */
+int do_pin[DO_PIN_NUM] = {
+    GPIO_NUM_1,  /* [0]  MCU_DO_0  */
+    GPIO_NUM_2,  /* [1]  MCU_DO_1  */
+    GPIO_NUM_42, /* [2]  MCU_DO_2  */
+    GPIO_NUM_41, /* [3]  MCU_DO_3  */
+    GPIO_NUM_40, /* [4]  MCU_DO_4  */
+    GPIO_NUM_39, /* [5]  MCU_DO_5  */
+    GPIO_NUM_38, /* [6]  MCU_DO_6  */
+    GPIO_NUM_37, /* [7]  MCU_DO_7  */
+    GPIO_NUM_36, /* [8]  MCU_DO_8  */
+    GPIO_NUM_35, /* [9]  MCU_DO_9  */
+    GPIO_NUM_0,  /* [10] MCU_DO_10 (strap，慎用) */
+    GPIO_NUM_45, /* [11] MCU_DO_11 (strap，main 里常保持 ON) */
+    GPIO_NUM_48, /* [12] MCU_DO_12 */
+    GPIO_NUM_47, /* [13] MCU_DO_13 */
+    GPIO_NUM_21, /* [14] MCU_DO_14 */
+    GPIO_NUM_14, /* [15] MCU_DO_15 */
+    GPIO_NUM_13, /* [16] MCU_DO_16 */
+    GPIO_NUM_12, /* [17] MCU_RXD / Modbus RX，勿当继电器用 */
+    GPIO_NUM_11, /* [18] MCU_TXD / Modbus TX，勿当继电器用 */
+    GPIO_NUM_10, /* [19] MCU_DO_19 */
+    GPIO_NUM_9,  /* [20] MCU_DO_20 */
+    GPIO_NUM_46, /* [21] MCU_DO_21 (strap) */
+    GPIO_NUM_3,  /* [22] MCU_SPEAKER_STOP */
+    GPIO_NUM_8,  /* [23] MCU_SPEAKER_START */
+    GPIO_NUM_18, /* [24] MCU_DO_24 */
+    GPIO_NUM_17, /* [25] MCU_DO_25 */
+    GPIO_NUM_20, /* [26] MCU_DO_26 */
+    GPIO_NUM_19, /* [27] MCU_DO_27 */
 };
 
+/*
+ * DI 映射表（软件下标 di_pin[0..5] ↔ 板级 MCU_DI_xx ↔ GPIO）
+ * 读取：get_di_pin(n)；暂停键等为 di_pin[2]（MODE 里常用）。
+ */
 int di_pin[] = {
-    GPIO_NUM_4, // di_pin[0]
-    GPIO_NUM_5, // di_pin[1]
-    GPIO_NUM_6,
-    GPIO_NUM_7,
-    GPIO_NUM_15,
-    GPIO_NUM_16,
+    GPIO_NUM_4,  /* [0] MCU_DI_0  跨循环锁定 */
+    GPIO_NUM_5,  /* [1] MCU_DI_1  跨循环锁定 */
+    GPIO_NUM_6,  /* [2] MCU_DI_2  暂停键 */
+    GPIO_NUM_7,  /* [3] MCU_DI_3  流量脉冲（sensor_init 未启用时仅普通输入） */
+    GPIO_NUM_15, /* [4] MCU_DI_4  水位等（mode_test） */
+    GPIO_NUM_16, /* [5] MCU_DI_5  数字输入 */
 };
 
 static const char *TAG = "MODE_CTRL";
@@ -312,21 +329,18 @@ esp_err_t pin_init(void)
 ********************************************************************************/
 int set_do_pin(int index, int level)
 {
-    // 1. 校验索引范围是否合法
     if (index < 0 || index >= (int)(sizeof(do_pin) / sizeof(do_pin[0])))
     {
         ESP_LOGE(TAG, "set_do_pin: Index out of bounds: %d", index);
-        return -1; // 非法索引，返回错误
+        return -1;
     }
 
-    // 2. 限制 level 值为 0 或 1，防止传入错误电平
     if (level != 0 && level != 1)
     {
         ESP_LOGW(TAG, "set_do_pin: Invalid level %d, forcing to 0 or 1", level);
         level = (level != 0) ? 1 : 0;
     }
 
-    // 3. 设置 GPIO 输出电平
     esp_err_t ret = gpio_set_level(do_pin[index], level);
     if (ret != ESP_OK)
     {
@@ -365,13 +379,11 @@ uint32_t get_output_reg_level(gpio_num_t gpio_num)
 ********************************************************************************/
 int get_do_pin(int index)
 {
-    // 检查索引范围，避免越界访问数组
     if (index < 0 || index >= (int)(sizeof(do_pin) / sizeof(do_pin[0])))
     {
         ESP_LOGE(TAG, "get_do_pin: Index out of bounds: %d", index);
-        return -1; // 无效索引返回错误码
+        return -1;
     }
-    // 读取对应 GPIO 引脚的输出寄存器电平
     int level = get_output_reg_level(do_pin[index]);
 
     IO_LOGI("get_do_pin: Returning DO%d (GPIO%d), level: %d", index, do_pin[index], level);

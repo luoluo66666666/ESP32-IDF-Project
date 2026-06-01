@@ -5,7 +5,6 @@
 
 static const char *TAG = "MODE2";
 
-extern int do_pin[26];
 extern int di_pin[6];
 
 

@@ -1,4 +1,4 @@
-﻿#include "ctrl_protocol.h"
+#include "ctrl_protocol.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -14,7 +14,6 @@
 #include "Wifi_module.h"
 
 extern EventGroupHandle_t event_ctrl_protocol;
-extern int do_pin[26];
 
 const char *TAG = "CTRL_PROTOCOL";
 EventGroupHandle_t event_motor_ctrl;
