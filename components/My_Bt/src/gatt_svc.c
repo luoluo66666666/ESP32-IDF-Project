@@ -10,6 +10,7 @@
 // #include "uart_module.h"
 
 #include "ctrl_protocol.h" // Include the ctrl_protocol header for ctrl_protocol functions
+#include "Wifi_module.h"
 char response[QUEUE_ITEM_SIZE];
 
 /* --------------------------- 定义是否启用 BLE 加密访问 --------------------------- */
@@ -177,6 +178,10 @@ void gatt_svr_subscribe_cb(struct ble_gap_event *event)
         custom_notify_enabled = event->subscribe.cur_notify || event->subscribe.cur_indicate;
 
         ESP_LOGI(TAG, "Custom characteristic notify/indicate updated: %d", custom_notify_enabled);
+        if (custom_notify_enabled)
+        {
+            gatt_svc_announce_device_sn();
+        }
     }
 }
 
@@ -209,6 +214,33 @@ int gatt_svc_init(void)
     }
 
     return 0;
+}
+
+void gatt_svc_announce_device_sn(void)
+{
+    const char *sn = wifi_module_get_device_sn();
+    ble_data_t tx_data = {0};
+    int written = 0;
+
+    if (sn == NULL || sn[0] == '\0' || ble_tx_queue == NULL)
+    {
+        return;
+    }
+
+    written = snprintf((char *)tx_data.buf, sizeof(tx_data.buf), "CMD:SN,OK,SN=%s", sn);
+    if (written <= 0 || written >= (int)sizeof(tx_data.buf))
+    {
+        return;
+    }
+
+    tx_data.len = (size_t)written;
+    if (xQueueSend(ble_tx_queue, &tx_data, pdMS_TO_TICKS(100)) != pdTRUE)
+    {
+        ESP_LOGW(TAG, "Failed to queue device SN announcement");
+        return;
+    }
+
+    ESP_LOGI(TAG, "Queued device SN announcement: %.*s", (int)tx_data.len, tx_data.buf);
 }
 
 

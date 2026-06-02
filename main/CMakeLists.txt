@@ -10,4 +10,5 @@ idf_component_register(SRCS "main.c"
                         ctrl_protocol
                         mode_ctrl
                         My_Bt
+                        OTA
                     EMBED_TXTFILES ca.pem pac_file.pac)

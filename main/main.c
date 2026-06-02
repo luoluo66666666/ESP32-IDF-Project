@@ -9,6 +9,7 @@
 #include "mode_ctrl.h"
 #include <esp_log.h>
 #include "modbus.h"
+#include "ota_rollback.h"
 
 static const char *TAG = "current MODE";
 
@@ -95,6 +96,8 @@ void app_main(void)
 {
     esp_err_t err;
 
+    ota_rollback_init();
+
     pin_init();
     ctrl_protocol_init(); // 初始化控制协议
     err = modbus_init();
@@ -108,7 +111,7 @@ void app_main(void)
     }
     // Wifi_task();          // 启动 WiFi 模块
     wifi_tcp_start();
-    // wifi_ota_mode_start("http://192.168.1.125:8080/ESP-wash.bin");
+    // OTA：先 CFG:OTA_URL=http://... 再 CMD:OTA
 
     ble_task(); // 启动 BLE 任务
     // Temp_task();
@@ -118,4 +121,6 @@ void app_main(void)
     // xTaskCreate(modbus_test_task, "modbus_test_task", 4096, NULL, 8, NULL);
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
+
+    ota_rollback_schedule_confirm();
 }

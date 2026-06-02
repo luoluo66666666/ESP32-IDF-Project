@@ -42,4 +42,10 @@ void http_ota_stop(TaskHandle_t task_handle);
  */
 esp_err_t http_ota_trigger(const char *firmware_url);
 
+/**
+ * 更新默认固件 URL（http_ota_start 之后可随时调用）
+ * @param url 固件 HTTP(S) 地址
+ */
+esp_err_t http_ota_set_default_url(const char *url);
+
 #endif // HTTP_OTA_H

@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "Http_ota.c"
+    SRCS "Http_ota.c" "ota_rollback.c"
     INCLUDE_DIRS "include"
     REQUIRES
         esp_http_client

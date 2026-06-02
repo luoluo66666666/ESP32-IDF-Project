@@ -8,12 +8,13 @@
 #include "freertos/event_groups.h"
 #include "freertos/task.h"
 
-#include "Http_ota.h"
 #include "modbus.h"
 #include "mode_ctrl.h"
-#include "Wifi_module.h"
 
 extern EventGroupHandle_t event_ctrl_protocol;
+
+/* 由 Wifi_module 实现，避免组件循环依赖 */
+bool wifi_module_handle_config_command(const char *input, char *output, int maxlen);
 
 const char *TAG = "CTRL_PROTOCOL";
 EventGroupHandle_t event_motor_ctrl;
@@ -432,49 +433,6 @@ static bool handle_temp_command(const char *input, char *output, int maxlen)
     return true;
 }
 
-/* 处理 OTA 命令 */
-static bool handle_ota_command(const char *input, char *output, int maxlen)
-{
-    char url[256] = {0};
-
-    if (strncasecmp(input, "ota", 3) != 0)
-    {
-        return false;
-    }
-
-    if (sscanf(input, "ota %255s", url) == 1)
-    {
-        esp_err_t ret = http_ota_trigger(url);
-        if (ret == ESP_OK)
-        {
-            snprintf(output, maxlen, "OTA,URL_TRIGGERED,OK\r\n");
-            ESP_LOGI(TAG, "OTA with custom URL triggered successfully");
-        }
-        else
-        {
-            snprintf(output, maxlen, "OTA,URL_TRIGGERED,ERR\r\n");
-            ESP_LOGE(TAG, "Failed to trigger OTA with custom URL: %s", esp_err_to_name(ret));
-        }
-        return true;
-    }
-
-    {
-        esp_err_t ret = http_ota_trigger(NULL);
-        if (ret == ESP_OK)
-        {
-            snprintf(output, maxlen, "OTA,DEFAULT,OK\r\n");
-            ESP_LOGI(TAG, "OTA with default URL triggered successfully");
-        }
-        else
-        {
-            snprintf(output, maxlen, "OTA,DEFAULT,ERR\r\n");
-            ESP_LOGE(TAG, "Failed to trigger OTA with default URL: %s", esp_err_to_name(ret));
-        }
-    }
-
-    return true;
-}
-
 /* 撑杆电机控制任务
  * DO0/DO1 = 1: 两个电机同时伸出
  * DO0/DO1 = 0: 两个电机同时回缩
@@ -760,8 +718,6 @@ void ctrl_protocol(char *input, char *output, int maxlen)
     if (handle_inverter_command(input, output, maxlen))
         return;
     if (handle_temp_command(input, output, maxlen))
-        return;
-    if (handle_ota_command(input, output, maxlen))
         return;
 
     ESP_LOGE(TAG, "Invalid command");

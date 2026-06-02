@@ -160,6 +160,20 @@ void http_ota_stop(TaskHandle_t task_handle)
     ESP_LOGI(TAG, "HTTP OTA task stopped and resources freed");
 }
 
+/* 更新默认固件 URL（OTA 任务已启动后生效） */
+esp_err_t http_ota_set_default_url(const char *url)
+{
+    if (url == NULL)
+    {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    strncpy(s_cfg.firmware_url, url, sizeof(s_cfg.firmware_url) - 1);
+    s_cfg.firmware_url[sizeof(s_cfg.firmware_url) - 1] = '\0';
+    ESP_LOGI(TAG, "Default firmware URL updated: %s", s_cfg.firmware_url);
+    return ESP_OK;
+}
+
 /* API: Trigger HTTP OTA (optional temporary URL) */
 esp_err_t http_ota_trigger(const char *firmware_url)
 {

@@ -36,5 +36,7 @@ void ble_queue_init(void);
 void ble_send_task(void *param);
 void ble_receive_task(void *param);
 
+/* BLE 连接/订阅后主动推送设备码（CMD:SN,OK,SN=...） */
+void gatt_svc_announce_device_sn(void);
 
 #endif // GATT_SVR_H
