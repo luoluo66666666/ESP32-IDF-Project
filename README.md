@@ -34,7 +34,10 @@ If the STA Wi-Fi connection does not succeed within about 30 seconds, the device
 
 ## Command Paths
 
-- `CMD:*` business commands can be sent by BLE or local TCP
+BLE、AP 本地 TCP、STA 云端 TCP 使用**同一套文本协议**：发什么命令，就按
+`ctrl_protocol` 原样回什么（与蓝牙一致，无 `CMD|` / `ACK|` 包装）。
+
+- `CMD:*` business commands
 - `CFG:*` updates configuration values
 - `SYS:*` switches operating mode and reports network status
 

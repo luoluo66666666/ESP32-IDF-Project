@@ -1,4 +1,4 @@
-﻿#include <errno.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -26,133 +26,197 @@
 #include "Http_ota.h"
 #include "ctrl_protocol.h"
 
+/*
+ * WiFi 模块说明（Wifi_manage.c）
+ *
+ * 【两种工作模式】
+ *   AP 配网模式：设备开热点 ESP-WASH，手机连上后 TCP 连 192.168.4.1:9000 发 CFG:/SYS: 命令
+ *   STA 工作模式：设备连路由器，再作为 TCP 客户端连云端 server_ip:server_port
+ *
+ * 【协议】与蓝牙相同：发什么命令，ctrl_protocol 原样回什么（无 CMD|/ACK| 包装）
+ *
+ * 【三个任务】
+ *   tcp_client_task    — STA 时连云端，收发 TCP
+ *   wifi_protocol_task — 把云端收到的命令交给 ctrl_protocol，应答放入发送队列
+ *   local_tcp_server_task — AP 时监听 9000，手机直连配网
+ *
+ * 【上电逻辑】NVS 里 wifi_prov=1 表示已配网 → 直接 STA；否则先进 AP
+ */
+
+/* 默认要连接的路由器 SSID（可被 NVS / CFG:WIFI_SSID 覆盖） */
 #define DEFAULT_WIFI_SSID "ZMJD"
+/* 默认路由器密码 */
 #define DEFAULT_WIFI_PASSWORD "ZM888888"
+/* 默认云端 TCP 服务器 IP */
 #define DEFAULT_SERVER_IP "192.168.1.125"
+/* 默认云端 TCP 端口 */
 #define DEFAULT_SERVER_PORT 9000
+
+/* 配网热点名称（固定，与 CFG:WIFI_SSID 无关） */
 #define DEFAULT_AP_SSID "ESP-WASH"
+/* 配网热点密码 */
 #define DEFAULT_AP_PASSWORD "12345678"
+/* 配网热点 WiFi 信道 */
 #define DEFAULT_AP_CHANNEL 1
+/* 配网热点允许同时连接的最大设备数 */
 #define DEFAULT_AP_MAX_CONN 4
+/* AP 模式下本地 TCP 监听端口（手机连 192.168.4.1:此端口） */
 #define DEFAULT_LOCAL_TCP_PORT 9000
+
+/* 试连新 WiFi 的超时时间（毫秒），超时则回滚并退回 AP */
 #define WIFI_TRY_CONNECT_TIMEOUT_MS 30000
 
+/* NVS 分区名：存放设备 SN、网络配置等 */
 #define DEVICE_NVS_PART "device_nvs"
+/* NVS 命名空间 */
 #define DEVICE_NVS_NS "device"
+/* NVS 键：设备序列号 */
 #define DEVICE_SN_KEY "sn"
+/* NVS 键：路由器 SSID */
 #define DEVICE_WIFI_SSID_KEY "wifi_ssid"
+/* NVS 键：路由器密码 */
 #define DEVICE_WIFI_PASSWORD_KEY "wifi_pwd"
+/* NVS 键：云端服务器 IP */
 #define DEVICE_SERVER_IP_KEY "server_ip"
+/* NVS 键：云端服务器端口 */
 #define DEVICE_SERVER_PORT_KEY "server_port"
+/* NVS 键：是否已完成配网（1=已配网，上电直接 STA） */
 #define DEVICE_PROVISIONED_KEY "wifi_prov"
 
+/* 设备 SN 字符串最大长度 */
 #define DEVICE_SN_MAX_LEN 32
+/* 路由器 SSID 最大长度 */
 #define WIFI_SSID_MAX_LEN 32
+/* 路由器密码最大长度 */
 #define WIFI_PASSWORD_MAX_LEN 64
+/* 云端 IP 字符串最大长度 */
 #define SERVER_IP_MAX_LEN 64
 
+/* 事件组位：STA 已获取 IP */
 #define WIFI_CONNECTED_BIT BIT0
+/* WiFi 收发队列单条消息最大字节数 */
 #define QUEUE_ITEM_SIZE 256
 
+/* 云端 TCP 收发队列里的一帧数据 */
 typedef struct
 {
-    uint8_t buf[QUEUE_ITEM_SIZE];
-    size_t len;
+    uint8_t buf[QUEUE_ITEM_SIZE]; /* 命令或应答内容 */
+    size_t len;                   /* buf 中有效字节数 */
 } wifi_data_t;
 
-// Runtime network configuration.
-// Defaults come from compile-time macros, then can be overridden from NVS.
-// CFG:* commands update runtime configuration.
-// SYS:* commands control network operating mode.
+/* 当前生效的网络配置（内存）；CFG:* 修改，SYS:MODE=STA 时写入 NVS */
 typedef struct
 {
-    char wifi_ssid[WIFI_SSID_MAX_LEN];
-    char wifi_password[WIFI_PASSWORD_MAX_LEN];
-    char server_ip[SERVER_IP_MAX_LEN];
-    uint16_t server_port;
+    char wifi_ssid[WIFI_SSID_MAX_LEN];           /* 要连接的路由器 SSID */
+    char wifi_password[WIFI_PASSWORD_MAX_LEN]; /* 要连接的路由器密码 */
+    char server_ip[SERVER_IP_MAX_LEN];           /* 云端 TCP 服务器 IP */
+    uint16_t server_port;                        /* 云端 TCP 端口 */
 } device_runtime_config_t;
 
+/* WiFi 运行模式 */
 typedef enum
 {
-    WIFI_RUN_MODE_AP_CONFIG = 0,
-    WIFI_RUN_MODE_STA_WORK = 1,
+    WIFI_RUN_MODE_AP_CONFIG = 0, /* AP 配网：开热点 + 本地 TCP */
+    WIFI_RUN_MODE_STA_WORK = 1,  /* STA 工作：连路由器 + 云端 TCP */
 } wifi_run_mode_t;
 
-static const char *TAG = "WIFI_TCP";
+static const char *TAG = "WIFI_TCP"; /* 日志标签 */
 
-static EventGroupHandle_t wifi_event_group = NULL;
-static QueueHandle_t wifi_tx_queue = NULL;
-static QueueHandle_t wifi_rx_queue = NULL;
+static EventGroupHandle_t wifi_event_group = NULL; /* WiFi 事件组（STA 获 IP 等） */
+static QueueHandle_t wifi_tx_queue = NULL;         /* 发往云端的应答队列 */
+static QueueHandle_t wifi_rx_queue = NULL;         /* 云端下发的命令队列 */
 
-static bool s_wifi_stack_initialized = false;
-static bool s_wifi_started = false;
-static bool s_wifi_ota_started_by_me = false;
-static TaskHandle_t s_wifi_ota_ota_task_handle = NULL;
-static TaskHandle_t s_local_tcp_server_task_handle = NULL;
-static volatile wifi_run_mode_t s_run_mode = WIFI_RUN_MODE_AP_CONFIG;
-static volatile bool s_mode_switch_requested = false;
+static bool s_wifi_stack_initialized = false;              /* WiFi 协议栈是否已初始化 */
+static bool s_wifi_started = false;                        /* WiFi 驱动是否已 start */
+static bool s_wifi_ota_started_by_me = false;              /* OTA 流程是否由本模块启动 WiFi */
+static TaskHandle_t s_wifi_ota_ota_task_handle = NULL;     /* HTTP OTA 任务句柄 */
+static TaskHandle_t s_local_tcp_server_task_handle = NULL; /* AP 本地 TCP 服务任务句柄 */
+static volatile wifi_run_mode_t s_run_mode = WIFI_RUN_MODE_AP_CONFIG; /* 当前运行模式 */
+static volatile bool s_mode_switch_requested = false;      /* 是否请求切换 AP/STA */
 
-static volatile bool tcp_connected = false;
-static volatile bool sn_updated = false;
-static volatile bool s_pending_wifi_config_change = false;
-static volatile bool s_pending_server_config_change = false;
-static volatile bool s_reconnect_requested = false;
-static volatile bool s_wifi_reconnect_requested = false;
-static volatile bool s_sta_connected = false;
-static volatile bool s_wifi_trial_active = false;
-static volatile bool s_local_tcp_server_stop_requested = false;
+static volatile bool tcp_connected = false;                /* 与云端 TCP 是否已连接 */
+static volatile bool sn_updated = false;                   /* SN 是否被更新（预留） */
+static volatile bool s_pending_wifi_config_change = false;   /* CFG 已改 WiFi，待 STA 生效 */
+static volatile bool s_pending_server_config_change = false; /* CFG 已改云端地址 */
+static volatile bool s_reconnect_requested = false;          /* 需要断开并重连云端 TCP */
+static volatile bool s_wifi_reconnect_requested = false;     /* 需要按新配置重连 WiFi */
+static volatile bool s_sta_connected = false;              /* 路由器 WiFi 是否已连接 */
+static volatile bool s_wifi_trial_active = false;            /* 正在试连新 WiFi（可超时回滚） */
+static volatile bool s_local_tcp_server_stop_requested = false; /* 请求停止 AP 本地 TCP 服务 */
 
-static int tcp_sock = -1;
-static int s_local_listen_sock = -1;
-static int s_local_client_sock = -1;
-static int64_t last_recv_tick = 0;
-static int64_t s_wifi_trial_deadline_ms = 0;
-static char device_sn[DEVICE_SN_MAX_LEN];
-static device_runtime_config_t s_runtime_config;
-static device_runtime_config_t s_last_good_config;
-static device_runtime_config_t s_pre_apply_config;
-static bool s_pre_apply_config_valid = false;
-static bool s_device_provisioned = false;
+static int tcp_sock = -1;            /* 云端 TCP 套接字描述符，-1 表示未连接 */
+static int s_local_listen_sock = -1; /* AP 模式 TCP 监听套接字 */
+static int s_local_client_sock = -1;  /* AP 模式当前连接的客户端套接字 */
+static int64_t last_recv_tick = 0;   /* 云端 TCP 上次收到数据的时间戳（毫秒） */
+static int64_t s_wifi_trial_deadline_ms = 0; /* WiFi 试连截止时间（毫秒） */
+static char device_sn[DEVICE_SN_MAX_LEN];    /* 设备序列号字符串 */
+static device_runtime_config_t s_runtime_config;   /* 当前正在使用的网络配置 */
+static device_runtime_config_t s_last_good_config; /* 上次连接成功的配置备份 */
+static device_runtime_config_t s_pre_apply_config; /* 修改 CFG 前的配置快照（用于回滚） */
+static bool s_pre_apply_config_valid = false;    /* 快照是否有效 */
+static bool s_device_provisioned = false;        /* 是否已配网（对应 NVS wifi_prov） */
 
+/* 将 SN 写入 NVS */
 static esp_err_t save_sn_to_nvs(const char *sn);
+/* 从 NVS 读取 SN */
 static esp_err_t load_sn_from_nvs(char *sn, size_t len);
+/* 从 NVS 加载网络配置与配网标志 */
 static esp_err_t load_device_config_from_nvs(void);
+/* 将网络配置保存到 NVS */
 static esp_err_t save_device_config_to_nvs(void);
+/* 设置/清除已配网标志并写入 NVS */
 static esp_err_t set_device_provisioned(bool provisioned);
+/* 查询是否已配网 */
 static bool is_device_provisioned(void);
+/* 加载编译期默认网络配置到 s_runtime_config */
 static void load_default_device_config(void);
+/* 安全初始化默认 NVS 与 device_nvs 分区 */
 static void init_nvs_safe(void);
+/* 一次性初始化 netif、事件循环、WiFi 栈 */
 static void ensure_wifi_stack_initialized(void);
+/* WiFi/IP 事件回调 */
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data);
+/* 应用 STA 配置并切换（封装） */
 static void apply_wifi_sta_config(void);
+/* 配置 SoftAP 参数（热点名/密码等） */
 static void apply_wifi_ap_config(void);
+/* 切换到 AP 配网模式 */
 static void switch_to_ap_config_mode(void);
+/* 切换到 STA 工作模式 */
 static void switch_to_sta_work_mode(void);
+/* 停止 AP 本地 TCP 服务 */
 static void stop_local_tcp_server(void);
+/* 处理 CFG:* 配网命令 */
 static bool handle_config_command(const char *input, char *output, int maxlen);
+/* 处理 SYS:* 系统命令 */
 static bool handle_system_command(const char *input, char *output, int maxlen);
+/* 配网完成后请求切 STA 并重连 */
 static void request_runtime_reconnect(bool wifi_changed, bool server_changed);
+/* WiFi 试连超时则回滚配置 */
 static void maybe_rollback_wifi_config(void);
+/* AP 模式本地 TCP 服务任务 */
 static void local_tcp_server_task(void *param);
+/* 处理 AP 模式下手机发来的一行命令 */
 static void process_local_tcp_command(int client_sock, char *line_buf, int *line_len);
+/* 安全关闭 AP 本地 TCP 客户端连接 */
 static void close_local_client_sock(int sock);
 
-/* Shared Wi-Fi logging hook. */
+/* WiFi 模块统一日志输出（可变参数） */
 void mywifi_log(const char *fmt, ...)
 {
-    va_list args;
+    va_list args; /* 可变参数列表 */
     va_start(args, fmt);
     vprintf(fmt, args);
     va_end(args);
 }
 
-/* Trim trailing whitespace and CRLF from a line. */
-static void trim_line(char *text)
+/* 去掉字符串末尾的空格、制表符和换行 */
+static void trim_line(char *text) /* text：待修剪的字符串（原地修改） */
 {
-    size_t len = strlen(text);
+    size_t len = strlen(text); /* 当前字符串长度 */
     while (len > 0)
     {
-        char c = text[len - 1];
+        char c = text[len - 1]; /* 末尾字符 */
         if (c != '\r' && c != '\n' && c != ' ' && c != '\t')
         {
             break;
@@ -161,10 +225,13 @@ static void trim_line(char *text)
     }
 }
 
-/* Copy a config string only if it fits and is non-empty. */
-static bool copy_config_value(char *dest, size_t dest_size, const char *value)
+/* 非空且长度合法时，把配置字符串拷贝到目标缓冲区 */
+static bool copy_config_value(
+    char *dest,        /* 目标缓冲区 */
+    size_t dest_size,  /* 目标容量 */
+    const char *value) /* 源字符串 */
 {
-    size_t len = strlen(value);
+    size_t len = strlen(value); /* 源字符串长度 */
     if (len == 0 || len >= dest_size)
     {
         return false;
@@ -174,7 +241,7 @@ static bool copy_config_value(char *dest, size_t dest_size, const char *value)
     return true;
 }
 
-/* Load the built-in default network configuration. */
+/* 加载编译期默认网络配置到 s_runtime_config */
 static void load_default_device_config(void)
 {
     memset(&s_runtime_config, 0, sizeof(s_runtime_config));
@@ -187,14 +254,14 @@ static void load_default_device_config(void)
     s_runtime_config.server_port = DEFAULT_SERVER_PORT;
 }
 
-/* Read a string from NVS; keep the current value on failure. */
+/* 从 NVS 读取字符串；失败则保留 buffer 原内容 */
 static void load_nvs_str_or_default(
-    nvs_handle_t nvs,
-    const char *key,
-    char *buffer,
-    size_t buffer_len)
+    nvs_handle_t nvs,      /* 已打开的 NVS 句柄 */
+    const char *key,       /* 键名 */
+    char *buffer,          /* 输出缓冲区 */
+    size_t buffer_len)     /* 缓冲区容量 */
 {
-    size_t required = buffer_len;
+    size_t required = buffer_len; /* NVS API 需要的长度入参 */
     if (nvs_get_str(nvs, key, buffer, &required) != ESP_OK)
     {
         return;
@@ -202,13 +269,13 @@ static void load_nvs_str_or_default(
     buffer[buffer_len - 1] = '\0';
 }
 
-/* Restore device network config from device_nvs. */
+/* 从 NVS 读出网络配置到 s_runtime_config，并加载 wifi_prov 配网标志 */
 static esp_err_t load_device_config_from_nvs(void)
 {
-    nvs_handle_t nvs;
-    uint16_t saved_port = 0;
-    esp_err_t err;
-    bool should_persist_defaults = false;
+    nvs_handle_t nvs;                  /* NVS 句柄 */
+    uint16_t saved_port = 0;           /* 从 NVS 读出的云端端口 */
+    esp_err_t err;                     /* NVS 操作返回值 */
+    bool should_persist_defaults = false; /* 是否需要把恢复的默认密码写回 NVS */
 
     load_default_device_config();
 
@@ -242,7 +309,7 @@ static esp_err_t load_device_config_from_nvs(void)
     }
 
     {
-        uint8_t provisioned = 0;
+        uint8_t provisioned = 0; /* NVS 中读出的配网标志 0/1 */
         if (nvs_get_u8(nvs, DEVICE_PROVISIONED_KEY, &provisioned) == ESP_OK)
         {
             s_device_provisioned = provisioned != 0;
@@ -263,7 +330,7 @@ static esp_err_t load_device_config_from_nvs(void)
 
     if (should_persist_defaults)
     {
-        esp_err_t save_err = save_device_config_to_nvs();
+        esp_err_t save_err = save_device_config_to_nvs(); /* 写回默认密码的保存结果 */
         if (save_err != ESP_OK)
         {
             ESP_LOGW(TAG, "Failed to persist restored defaults: %s", esp_err_to_name(save_err));
@@ -280,10 +347,10 @@ static esp_err_t load_device_config_from_nvs(void)
     return ESP_OK;
 }
 
-/* Persist the current runtime config into device_nvs. */
+/* 把 s_runtime_config 写入 NVS（路由器 + 云端地址） */
 static esp_err_t save_device_config_to_nvs(void)
 {
-    nvs_handle_t nvs;
+    nvs_handle_t nvs; /* NVS 句柄 */
     esp_err_t err = nvs_open_from_partition(DEVICE_NVS_PART, DEVICE_NVS_NS, NVS_READWRITE, &nvs);
     if (err != ESP_OK)
     {
@@ -304,9 +371,9 @@ static esp_err_t save_device_config_to_nvs(void)
     return err;
 }
 
-static esp_err_t set_device_provisioned(bool provisioned)
+static esp_err_t set_device_provisioned(bool provisioned) /* provisioned：true 表示已完成配网 */
 {
-    nvs_handle_t nvs;
+    nvs_handle_t nvs; /* NVS 句柄 */
     esp_err_t err = nvs_open_from_partition(DEVICE_NVS_PART, DEVICE_NVS_NS, NVS_READWRITE, &nvs);
     if (err != ESP_OK)
     {
@@ -332,10 +399,10 @@ static bool is_device_provisioned(void)
     return s_device_provisioned;
 }
 
-/* Initialize default NVS and the custom device_nvs partition safely. */
+/* 安全初始化默认 NVS 分区与 device_nvs 专用分区 */
 static void init_nvs_safe(void)
 {
-    esp_err_t err = nvs_flash_init();
+    esp_err_t err = nvs_flash_init(); /* 默认 NVS 初始化结果 */
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -352,7 +419,7 @@ static void init_nvs_safe(void)
     ESP_LOGI(TAG, "NVS init OK");
 }
 
-/* One-time initialization of netif, event loop, and Wi-Fi stack. */
+/* 一次性初始化网络接口、事件循环和 WiFi 协议栈 */
 static void ensure_wifi_stack_initialized(void)
 {
     if (s_wifi_stack_initialized)
@@ -365,7 +432,7 @@ static void ensure_wifi_stack_initialized(void)
     esp_netif_create_default_wifi_sta();
     esp_netif_create_default_wifi_ap();
 
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT(); /* WiFi 默认初始化参数 */
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
@@ -374,10 +441,10 @@ static void ensure_wifi_stack_initialized(void)
     s_wifi_stack_initialized = true;
 }
 
-/* Configure the device SoftAP used for phone-side setup/debugging. */
+/* 配置手机配网用的 SoftAP（热点名、密码、信道等） */
 static void apply_wifi_ap_config(void)
 {
-    wifi_config_t ap_config = {0};
+    wifi_config_t ap_config = {0}; /* AP 模式 WiFi 配置结构体 */
 
     copy_config_value((char *)ap_config.ap.ssid, sizeof(ap_config.ap.ssid), DEFAULT_AP_SSID);
     copy_config_value((char *)ap_config.ap.password, sizeof(ap_config.ap.password), DEFAULT_AP_PASSWORD);
@@ -395,8 +462,8 @@ static void apply_wifi_ap_config(void)
     ESP_LOGI(TAG, "SoftAP ready: ssid=%s", DEFAULT_AP_SSID);
 }
 
-/* Close a local TCP client socket once (avoid double-close with stop_local_tcp_server). */
-static void close_local_client_sock(int sock)
+/* 关闭 AP 本地 TCP 客户端套接字（避免与 stop 逻辑重复关闭） */
+static void close_local_client_sock(int sock) /* sock：待关闭的客户端套接字 */
 {
     if (sock < 0 || s_local_client_sock != sock)
     {
@@ -408,6 +475,7 @@ static void close_local_client_sock(int sock)
     close(sock);
 }
 
+/* 关闭 AP 本地 TCP（切 STA 前调用，避免端口占用） */
 static void stop_local_tcp_server(void)
 {
     s_local_tcp_server_stop_requested = true;
@@ -419,14 +487,14 @@ static void stop_local_tcp_server(void)
 
     if (s_local_listen_sock >= 0)
     {
-        int listen_sock = s_local_listen_sock;
+        int listen_sock = s_local_listen_sock; /* 暂存监听套接字再关闭 */
         s_local_listen_sock = -1;
         shutdown(listen_sock, SHUT_RDWR);
         close(listen_sock);
     }
 
-    /* Let the server task exit its recv/accept loop; do not vTaskDelete from here. */
-    for (int i = 0; i < 100 && s_local_tcp_server_task_handle != NULL; i++)
+    /* 等待本地 TCP 任务自行退出，避免在此处强删导致竞态 */
+    for (int i = 0; i < 100 && s_local_tcp_server_task_handle != NULL; i++) /* i：等待任务退出的轮询次数 */
     {
         vTaskDelay(pdMS_TO_TICKS(20));
     }
@@ -441,6 +509,7 @@ static void stop_local_tcp_server(void)
     s_local_tcp_server_stop_requested = false;
 }
 
+/* 进入 AP 配网：开热点 ESP-WASH，启动 192.168.4.1:9000 本地 TCP */
 static void switch_to_ap_config_mode(void)
 {
     s_run_mode = WIFI_RUN_MODE_AP_CONFIG;
@@ -470,9 +539,10 @@ static void switch_to_ap_config_mode(void)
     ESP_LOGI(TAG, "Switched to AP config mode");
 }
 
+/* 进入 STA 工作：连 s_runtime_config 里的路由器，之后由 tcp_client 连云端 */
 static void switch_to_sta_work_mode(void)
 {
-    wifi_config_t wifi_config = {0};
+    wifi_config_t wifi_config = {0}; /* STA 模式 WiFi 配置结构体 */
 
     s_run_mode = WIFI_RUN_MODE_STA_WORK;
     s_mode_switch_requested = false;
@@ -503,8 +573,15 @@ static void switch_to_sta_work_mode(void)
     ESP_LOGI(TAG, "Switched to STA work mode: ssid=%s", s_runtime_config.wifi_ssid);
 }
 
-/* Wi-Fi event handler for STA connect/disconnect/IP events. */
-static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+/*
+ * WiFi 事件：STA 启动/断线/拿到 IP；AP 启动时拉起本地 TCP 服务
+ * 拿到 IP 后若处于试连期，则把当前配置记为“上次成功配置”
+ */
+static void wifi_event_handler(
+    void *arg,                    /* 用户参数（未使用） */
+    esp_event_base_t event_base,  /* 事件大类：WIFI_EVENT / IP_EVENT */
+    int32_t event_id,             /* 具体事件 ID */
+    void *event_data)             /* 事件附带数据 */
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START)
     {
@@ -551,13 +628,13 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
     }
 }
 
-/* Apply the current STA config and reconnect when settings change. */
+/* 应用当前 STA 配置（内部调用 switch_to_sta_work_mode） */
 static void apply_wifi_sta_config(void)
 {
     switch_to_sta_work_mode();
 }
 
-/* Initialize the Wi-Fi RX/TX queues. */
+/* 创建云端 TCP 用的收发队列 */
 void wifi_module_queue_init(void)
 {
     if (wifi_tx_queue == NULL)
@@ -578,8 +655,11 @@ void wifi_module_queue_init(void)
     ESP_LOGI(TAG, "WiFi queues created successfully");
 }
 
-/* Start in AP config mode so the phone can configure the device locally. */
-static void wifi_init_sta(void)
+/*
+ * 上电初始化 WiFi（函数名历史遗留叫 sta，实际按是否配网分支）
+ * 未配网 → AP；已配网 → 直接 STA
+ */
+static void wifi_init_mode(void)
 {
     if (wifi_event_group == NULL)
     {
@@ -599,18 +679,18 @@ static void wifi_init_sta(void)
     }
 }
 
-/* Enter OTA mode and start the HTTP OTA task after Wi-Fi is ready. */
-void wifi_ota_mode_start(const char *default_url)
+/* 进入 OTA 模式：等待 WiFi 有 IP 后启动 HTTP OTA 任务 */
+void wifi_ota_mode_start(const char *default_url) /* default_url：OTA 固件 URL，可为 NULL */
 {
     ESP_LOGI(TAG, "Entering OTA mode");
 
     if (!s_wifi_started)
     {
-        wifi_init_sta();
+        wifi_init_mode();
         s_wifi_ota_started_by_me = true;
     }
 
-    EventBits_t bits = xEventGroupWaitBits(
+    EventBits_t bits = xEventGroupWaitBits( /* 等待 STA 获 IP 的事件位 */
         wifi_event_group,
         WIFI_CONNECTED_BIT,
         pdFALSE,
@@ -622,7 +702,7 @@ void wifi_ota_mode_start(const char *default_url)
         return;
     }
 
-    http_ota_config_t cfg = {0};
+    http_ota_config_t cfg = {0}; /* HTTP OTA 任务参数 */
     if (default_url)
     {
         strncpy(cfg.firmware_url, default_url, sizeof(cfg.firmware_url) - 1);
@@ -641,7 +721,7 @@ void wifi_ota_mode_start(const char *default_url)
     }
 }
 
-/* Exit OTA mode and release OTA-owned resources. */
+/* 退出 OTA 模式并释放本模块占用的 WiFi/OTA 资源 */
 void wifi_ota_mode_stop(void)
 {
     ESP_LOGI(TAG, "Exiting OTA mode");
@@ -660,8 +740,10 @@ void wifi_ota_mode_stop(void)
     }
 }
 
-/* Mark reconnect requirements after runtime config changes. */
-static void request_runtime_reconnect(bool wifi_changed, bool server_changed)
+/* SYS:MODE=STA / CFG:APPLY 后：切 STA，并按需标记 WiFi 试连或云端重连 */
+static void request_runtime_reconnect(
+    bool wifi_changed,   /* 路由器 SSID/密码是否变更 */
+    bool server_changed) /* 云端 IP/端口是否变更 */
 {
     s_run_mode = WIFI_RUN_MODE_STA_WORK;
     s_mode_switch_requested = true;
@@ -679,9 +761,10 @@ static void request_runtime_reconnect(bool wifi_changed, bool server_changed)
     }
 }
 
+/* 试连新 WiFi 超过 30s 仍未连上 → 恢复旧配置并退回 AP 配网 */
 static void maybe_rollback_wifi_config(void)
 {
-    int64_t now_ms = esp_timer_get_time() / 1000;
+    int64_t now_ms = esp_timer_get_time() / 1000; /* 当前时间（毫秒） */
 
     if (!s_wifi_trial_active || s_sta_connected || now_ms < s_wifi_trial_deadline_ms)
     {
@@ -714,7 +797,16 @@ static void maybe_rollback_wifi_config(void)
     s_reconnect_requested = true;
 }
 
-static bool handle_system_command(const char *input, char *output, int maxlen)
+/*
+ * 系统命令 SYS:*
+ *   SYS:MODE=STA — 保存配置、标记已配网、切 STA
+ *   SYS:MODE=AP  — 退回配网热点
+ *   SYS:STATUS   — 查模式 / WiFi / 云端 TCP / 试连 / 是否已配网
+ */
+static bool handle_system_command(
+    const char *input,  /* 完整命令行，如 SYS:STATUS */
+    char *output,       /* 应答写入缓冲区 */
+    int maxlen)         /* output 最大容量 */
 {
     if (strncmp(input, "SYS:", 4) != 0)
     {
@@ -723,14 +815,14 @@ static bool handle_system_command(const char *input, char *output, int maxlen)
 
     if (strcmp(input, "SYS:MODE=STA") == 0)
     {
-        esp_err_t err = save_device_config_to_nvs();
+        esp_err_t err = save_device_config_to_nvs(); /* 保存网络配置到 NVS */
         if (err != ESP_OK)
         {
             snprintf(output, maxlen, "SYS:ERR,MODE\r\n");
             return true;
         }
 
-        err = set_device_provisioned(true);
+        err = set_device_provisioned(true); /* 标记已配网并写 NVS */
         if (err != ESP_OK)
         {
             snprintf(output, maxlen, "SYS:ERR,MODE\r\n");
@@ -775,10 +867,18 @@ static bool handle_system_command(const char *input, char *output, int maxlen)
     return true;
 }
 
-/* Handle CFG:* commands for Wi-Fi/server configuration. */
-static bool handle_config_command(const char *input, char *output, int maxlen)
+/*
+ * 配网命令 CFG:*（与蓝牙相同）
+ *   WIFI_SSID / WIFI_PASSWORD — 路由器
+ *   SERVER_IP / SERVER_PORT   — 云端 TCP
+ *   GET / SAVE / APPLY / CANCEL
+ */
+static bool handle_config_command(
+    const char *input,  /* 完整命令行，如 CFG:WIFI_SSID=xxx */
+    char *output,       /* 应答写入缓冲区 */
+    int maxlen)         /* output 最大容量 */
 {
-    const char *value = NULL;
+    const char *value = NULL; /* 指向命令中“=”后面的参数值 */
 
     if (strncmp(input, "CFG:", 4) != 0)
     {
@@ -855,8 +955,8 @@ static bool handle_config_command(const char *input, char *output, int maxlen)
     value = strstr(input, "CFG:SERVER_PORT=");
     if (value == input)
     {
-        char *end = NULL;
-        long port = 0;
+        char *end = NULL; /* strtol 解析结束位置 */
+        long port = 0;    /* 解析出的端口号 */
 
         value += strlen("CFG:SERVER_PORT=");
         port = strtol(value, &end, 10);
@@ -874,7 +974,7 @@ static bool handle_config_command(const char *input, char *output, int maxlen)
 
     if (strcmp(input, "CFG:SAVE") == 0)
     {
-        esp_err_t err = save_device_config_to_nvs();
+        esp_err_t err = save_device_config_to_nvs(); /* 保存到 NVS 的结果 */
         snprintf(
             output,
             maxlen,
@@ -884,7 +984,7 @@ static bool handle_config_command(const char *input, char *output, int maxlen)
 
     if (strcmp(input, "CFG:APPLY") == 0)
     {
-        bool handled = handle_system_command("SYS:MODE=STA", output, maxlen);
+        bool handled = handle_system_command("SYS:MODE=STA", output, maxlen); /* 是否成功切 STA */
         if (handled && strncmp(output, "SYS:OK,MODE=STA", 15) == 0)
         {
             snprintf(output, maxlen, "CFG:OK,APPLY\r\n");
@@ -907,8 +1007,11 @@ static bool handle_config_command(const char *input, char *output, int maxlen)
     return true;
 }
 
-/* Public config-command entry used by BLE and other transports. */
-bool wifi_module_handle_config_command(const char *input, char *output, int maxlen)
+/* 供 ctrl_protocol 调用：先 CFG 再 SYS，与 BLE/本地 TCP/云端共用 */
+bool wifi_module_handle_config_command(
+    const char *input,  /* 命令字符串 */
+    char *output,       /* 应答缓冲区 */
+    int maxlen)         /* 应答缓冲区大小 */
 {
     if (handle_config_command(input, output, maxlen))
     {
@@ -918,9 +1021,13 @@ bool wifi_module_handle_config_command(const char *input, char *output, int maxl
     return handle_system_command(input, output, maxlen);
 }
 
-static void send_response_with_prefix(int sock, const char *prefix, const char *response)
+/* 向指定套接字发送应答；prefix 非空时拼在应答前（本地 TCP 通常传 NULL） */
+static void send_response_with_prefix(
+    int sock,              /* 目标套接字 */
+    const char *prefix,    /* 可选前缀（一般为 NULL） */
+    const char *response)  /* ctrl_protocol 应答正文 */
 {
-    char tx_buf[QUEUE_ITEM_SIZE] = {0};
+    char tx_buf[QUEUE_ITEM_SIZE] = {0}; /* 待发送缓冲区 */
 
     if (response == NULL || response[0] == '\0')
     {
@@ -936,13 +1043,13 @@ static void send_response_with_prefix(int sock, const char *prefix, const char *
         snprintf(tx_buf, sizeof(tx_buf), "%s", response);
     }
 
-    size_t len = strlen(tx_buf);
+    size_t len = strlen(tx_buf); /* 待发数据长度 */
     if (len == 0)
     {
         return;
     }
 
-    if (tx_buf[len - 1] != '\n' && len < sizeof(tx_buf) - 1)
+    if (tx_buf[len - 1] != '\n' && len < sizeof(tx_buf) - 1) /* 末尾无换行则补 \n */
     {
         tx_buf[len++] = '\n';
         tx_buf[len] = '\0';
@@ -951,9 +1058,13 @@ static void send_response_with_prefix(int sock, const char *prefix, const char *
     send(sock, tx_buf, len, 0);
 }
 
-static void process_local_tcp_command(int client_sock, char *line_buf, int *line_len)
+/* AP 模式：收到一行 → ctrl_protocol → 原样回给手机（与蓝牙一致） */
+static void process_local_tcp_command(
+    int client_sock,   /* 手机 TCP 连接套接字 */
+    char *line_buf,    /* 行缓冲 */
+    int *line_len)     /* 行缓冲当前长度（入参/出参） */
 {
-    char response[QUEUE_ITEM_SIZE] = {0};
+    char response[QUEUE_ITEM_SIZE] = {0}; /* ctrl_protocol 输出缓冲区 */
 
     if (*line_len <= 0)
     {
@@ -974,18 +1085,21 @@ static void process_local_tcp_command(int client_sock, char *line_buf, int *line
     send_response_with_prefix(client_sock, NULL, response);
 }
 
-/* Ignore transport-layer server messages that are not business commands. */
-static bool should_ignore_server_line(const char *line)
+/* 云端可选保活行，不进 ctrl_protocol（业务命令请直接发 SYS:/CMD:/CFG:） */
+static bool should_ignore_server_line(const char *line) /* line：云端发来的一行文本 */
 {
     return strcmp(line, "REG,OK") == 0 || strcmp(line, "PING") == 0 || strcmp(line, "PONG") == 0;
 }
 
-/* TCP client task used for upstream server communication. */
-void tcp_client_task(void *param)
+/*
+ * 云端 TCP 客户端任务（仅 STA 模式运行）
+ * 循环：等 WiFi 有 IP → connect 云端 → 按行收命令入 rx 队列 → 从 tx 队列发应答
+ */
+void tcp_client_task(void *param) /* param：FreeRTOS 任务参数（未使用） */
 {
-    char rx_buf[256];
-    char line_buf[256];
-    int line_len = 0;
+    char rx_buf[256];  /* 云端 TCP 单次 recv 缓冲区 */
+    char line_buf[256]; /* 按行组包缓冲区 */
+    int line_len = 0;   /* line_buf 中已累积的字节数 */
 
     while (1)
     {
@@ -1017,13 +1131,13 @@ void tcp_client_task(void *param)
             continue;
         }
 
-        EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(1000));
+        EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(1000)); /* 等 STA 有 IP */
         if ((bits & WIFI_CONNECTED_BIT) == 0)
         {
             continue;
         }
 
-        int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+        int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP); /* 新建云端 TCP 套接字 */
         if (sock < 0)
         {
             ESP_LOGE(TAG, "socket create failed, errno=%d", errno);
@@ -1031,7 +1145,7 @@ void tcp_client_task(void *param)
             continue;
         }
 
-        struct sockaddr_in server_addr = {
+        struct sockaddr_in server_addr = { /* 云端服务器地址 */
             .sin_family = AF_INET,
             .sin_port = htons(s_runtime_config.server_port),
             .sin_addr.s_addr = inet_addr(s_runtime_config.server_ip),
@@ -1054,19 +1168,15 @@ void tcp_client_task(void *param)
 
         ESP_LOGI(TAG, "TCP connected");
 
-        char reg[64];
-        snprintf(reg, sizeof(reg), "REG|%s|1.0.0\n", device_sn);
-        send(sock, reg, strlen(reg), 0);
-
         while (1)
         {
-            fd_set rfds;
-            struct timeval tv = {.tv_sec = 1, .tv_usec = 0};
+            fd_set rfds;                              /* select 读集合 */
+            struct timeval tv = {.tv_sec = 1, .tv_usec = 0}; /* select 超时 1 秒 */
 
             FD_ZERO(&rfds);
             FD_SET(sock, &rfds);
 
-            int ret = select(sock + 1, &rfds, NULL, NULL, &tv);
+            int ret = select(sock + 1, &rfds, NULL, NULL, &tv); /* 等待可读或超时 */
             if (ret < 0)
             {
                 ESP_LOGE(TAG, "select failed, errno=%d", errno);
@@ -1075,7 +1185,7 @@ void tcp_client_task(void *param)
 
             if (ret > 0 && FD_ISSET(sock, &rfds))
             {
-                int len = recv(sock, rx_buf, sizeof(rx_buf), 0);
+                int len = recv(sock, rx_buf, sizeof(rx_buf), 0); /* 本次收到的字节数 */
                 if (len <= 0)
                 {
                     break;
@@ -1083,9 +1193,9 @@ void tcp_client_task(void *param)
 
                 last_recv_tick = esp_timer_get_time() / 1000;
 
-                for (int i = 0; i < len; i++)
+                for (int i = 0; i < len; i++) /* i：本次 recv 数据中的字节下标 */
                 {
-                    char c = rx_buf[i];
+                    char c = rx_buf[i]; /* 当前处理的字符 */
                     if (c == '\r')
                     {
                         continue;
@@ -1098,14 +1208,8 @@ void tcp_client_task(void *param)
 
                         if (line_buf[0] != '\0' && !should_ignore_server_line(line_buf))
                         {
-                            char *payload = line_buf;
-                            if (strncmp(payload, "CMD|", 4) == 0)
-                            {
-                                payload += 4;
-                            }
-
-                            wifi_data_t pkt = {0};
-                            strncpy((char *)pkt.buf, payload, QUEUE_ITEM_SIZE - 1);
+                            wifi_data_t pkt = {0}; /* 入队给 wifi_protocol_task 的命令包 */
+                            strncpy((char *)pkt.buf, line_buf, QUEUE_ITEM_SIZE - 1);
                             pkt.buf[QUEUE_ITEM_SIZE - 1] = '\0';
                             pkt.len = strlen((char *)pkt.buf);
                             xQueueSend(wifi_rx_queue, &pkt, 0);
@@ -1120,13 +1224,13 @@ void tcp_client_task(void *param)
                 }
             }
 
-            wifi_data_t tx = {0};
+            wifi_data_t tx = {0}; /* 从发送队列取出的应答 */
             if (xQueueReceive(wifi_tx_queue, &tx, 0) == pdTRUE)
             {
                 send(sock, tx.buf, tx.len, 0);
             }
 
-            if (s_reconnect_requested)
+            if (s_reconnect_requested) /* 配置变更等需要重连云端 */
             {
                 ESP_LOGW(TAG, "Reconnect requested, closing current TCP session");
                 break;
@@ -1148,16 +1252,17 @@ void tcp_client_task(void *param)
     }
 }
 
-static void local_tcp_server_task(void *param)
+/* AP 配网：在 192.168.4.1:9000 监听，手机 TCP 连入后走 process_local_tcp_command */
+static void local_tcp_server_task(void *param) /* param：FreeRTOS 任务参数（未使用） */
 {
-    struct sockaddr_in server_addr = {0};
-    struct sockaddr_in client_addr = {0};
-    socklen_t client_addr_len = sizeof(client_addr);
-    int listen_sock = -1;
-    int client_sock = -1;
-    char rx_buf[QUEUE_ITEM_SIZE] = {0};
-    char line_buf[QUEUE_ITEM_SIZE] = {0};
-    int line_len = 0;
+    struct sockaddr_in server_addr = {0};  /* 本机监听地址 */
+    struct sockaddr_in client_addr = {0};  /* 客户端地址（accept 填充） */
+    socklen_t client_addr_len = sizeof(client_addr); /* client_addr 长度 */
+    int listen_sock = -1;  /* 监听套接字 */
+    int client_sock = -1;  /* 当前连接的客户端套接字 */
+    char rx_buf[QUEUE_ITEM_SIZE] = {0}; /* recv 缓冲区 */
+    char line_buf[QUEUE_ITEM_SIZE] = {0}; /* 按行组包缓冲区 */
+    int line_len = 0; /* line_buf 已累积长度 */
 
     vTaskDelay(pdMS_TO_TICKS(500));
 
@@ -1172,7 +1277,7 @@ static void local_tcp_server_task(void *param)
         return;
     }
 
-    int reuse = 1;
+    int reuse = 1; /* 端口复用，避免重启后 bind 失败 */
     setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
 
     server_addr.sin_family = AF_INET;
@@ -1216,7 +1321,7 @@ static void local_tcp_server_task(void *param)
 
         s_local_client_sock = client_sock;
 
-        char client_ip[INET_ADDRSTRLEN] = {0};
+        char client_ip[INET_ADDRSTRLEN] = {0}; /* 客户端 IP 字符串 */
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
         ESP_LOGI(TAG, "Local TCP client connected: %s:%u", client_ip, ntohs(client_addr.sin_port));
         line_len = 0;
@@ -1228,16 +1333,16 @@ static void local_tcp_server_task(void *param)
                 break;
             }
 
-            int len = recv(client_sock, rx_buf, sizeof(rx_buf), 0);
+            int len = recv(client_sock, rx_buf, sizeof(rx_buf), 0); /* 本次收到字节数 */
             if (len <= 0)
             {
                 ESP_LOGW(TAG, "Local TCP client disconnected");
                 break;
             }
 
-            for (int i = 0; i < len; i++)
+            for (int i = 0; i < len; i++) /* i：本次 recv 数据中的字节下标 */
             {
-                char c = rx_buf[i];
+                char c = rx_buf[i]; /* 当前字符 */
                 if (c == '\r')
                 {
                     continue;
@@ -1274,11 +1379,14 @@ static void local_tcp_server_task(void *param)
     vTaskDelete(NULL);
 }
 
-/* Dispatch TCP-client payloads into ctrl_protocol(). */
-void wifi_protocol_task(void *param)
+/*
+ * 云端协议任务：从 rx 队列取命令 → ctrl_protocol → 应答原样放入 tx 队列
+ * 与 ble_receive_task 逻辑一致，不做 ACK| 包装
+ */
+void wifi_protocol_task(void *param) /* param：FreeRTOS 任务参数（未使用） */
 {
-    wifi_data_t rx;
-    char response[256];
+    wifi_data_t rx;        /* 从 rx 队列取出的云端命令 */
+    char response[256];    /* ctrl_protocol 应答缓冲区 */
 
     while (1)
     {
@@ -1303,29 +1411,27 @@ void wifi_protocol_task(void *param)
             continue;
         }
 
-        wifi_data_t tx = {0};
-        snprintf((char *)tx.buf, QUEUE_ITEM_SIZE, "ACK|%.*s", QUEUE_ITEM_SIZE - 5, response);
+        wifi_data_t tx = {0}; /* 放入 tx 队列、由 tcp_client 发往云端 */
+        strncpy((char *)tx.buf, response, QUEUE_ITEM_SIZE - 1);
+        tx.buf[QUEUE_ITEM_SIZE - 1] = '\0';
+        tx.len = strnlen((char *)tx.buf, QUEUE_ITEM_SIZE);
 
-        size_t len = strlen((char *)tx.buf);
-        if (len == 0 || tx.buf[len - 1] != '\n')
+        if (xQueueSend(wifi_tx_queue, &tx, pdMS_TO_TICKS(10)) != pdTRUE)
         {
-            if (len < QUEUE_ITEM_SIZE - 1)
-            {
-                tx.buf[len++] = '\n';
-                tx.buf[len] = '\0';
-            }
+            ESP_LOGW(TAG, "WiFi TX queue full, response dropped");
         }
-
-        tx.len = len;
-        xQueueSend(wifi_tx_queue, &tx, 0);
+        else
+        {
+            ESP_LOGI(TAG, "TCP TX: %s", tx.buf);
+        }
     }
 }
 
-/* Load device SN from device_nvs. */
-static esp_err_t load_sn_from_nvs(char *sn, size_t len)
+/* 从 device_nvs 读取设备 SN */
+static esp_err_t load_sn_from_nvs(char *sn, size_t len) /* sn：输出缓冲；len：缓冲容量 */
 {
-    nvs_handle_t nvs;
-    size_t required_len = len;
+    nvs_handle_t nvs;              /* NVS 句柄 */
+    size_t required_len = len;     /* SN 缓冲区容量（NVS API 入参） */
     esp_err_t err = nvs_open_from_partition(DEVICE_NVS_PART, DEVICE_NVS_NS, NVS_READONLY, &nvs);
     if (err != ESP_OK)
     {
@@ -1337,10 +1443,10 @@ static esp_err_t load_sn_from_nvs(char *sn, size_t len)
     return err;
 }
 
-/* Save device SN into device_nvs. */
-static esp_err_t save_sn_to_nvs(const char *sn)
+/* 将设备 SN 写入 device_nvs */
+static esp_err_t save_sn_to_nvs(const char *sn) /* sn：要保存的序列号字符串 */
 {
-    nvs_handle_t nvs;
+    nvs_handle_t nvs; /* NVS 句柄 */
     esp_err_t err = nvs_open_from_partition(DEVICE_NVS_PART, DEVICE_NVS_NS, NVS_READWRITE, &nvs);
     if (err != ESP_OK)
     {
@@ -1356,15 +1462,15 @@ static esp_err_t save_sn_to_nvs(const char *sn)
     return err;
 }
 
-/* Generate a default SN from the Wi-Fi STA MAC address. */
-static void generate_sn(char *sn, size_t len)
+/* 用 WiFi STA 网卡 MAC 生成默认 SN（格式 SN_XXXXXXXXXXXX） */
+static void generate_sn(char *sn, size_t len) /* sn：输出缓冲；len：缓冲容量 */
 {
-    uint8_t mac[6] = {0};
+    uint8_t mac[6] = {0}; /* STA 接口 MAC 地址 6 字节 */
     esp_read_mac(mac, ESP_MAC_WIFI_STA);
     snprintf(sn, len, "SN_%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
-/* Initialize device SN from NVS, or generate and save a new one. */
+/* 初始化设备 SN：优先读 NVS，没有则按 MAC 生成并保存 */
 static void init_device_sn(void)
 {
     memset(device_sn, 0, sizeof(device_sn));
@@ -1386,14 +1492,18 @@ static void init_device_sn(void)
     }
 }
 
-/* Start Wi-Fi, protocol tasks, the upstream TCP client, and the local TCP server. */
+/*
+ * 模块入口（main 里调用）
+ * 顺序：NVS → SN → 读配置 → 队列 → 按配网状态开 AP/STA → 起云端协议任务 + TCP 客户端
+ * 本地 TCP 服务在 switch_to_ap_config_mode / AP_START 事件里按需创建
+ */
 void wifi_tcp_start(void)
 {
     init_nvs_safe();
     init_device_sn();
     load_device_config_from_nvs();
     wifi_module_queue_init();
-    wifi_init_sta();
+    wifi_init_mode();
 
     xTaskCreate(wifi_protocol_task, "wifi_proto", 4096, NULL, 6, NULL);
     xTaskCreate(tcp_client_task, "tcp_client", 4096, NULL, 5, NULL);
