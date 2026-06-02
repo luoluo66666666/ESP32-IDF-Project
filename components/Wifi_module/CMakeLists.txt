@@ -1,7 +1,6 @@
 idf_component_register(
     SRCS
         "Wifi_manage.c"
-        "Wifi_module.c"
     INCLUDE_DIRS
         "include"
     REQUIRES

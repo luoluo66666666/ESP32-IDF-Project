@@ -8,13 +8,19 @@ ESP-Wash is an ESP32-S3 device project with three control/configuration paths:
 
 ## Local Config Mode
 
-On boot, the device starts in AP config mode by default:
+On first boot (not yet provisioned), the device starts in AP config mode:
 
 - AP SSID: `ESP-WASH`
 - AP password: `12345678`
 - Local TCP server: `192.168.4.1:9000`
 
 In this mode, a phone can connect to the device hotspot and send commands locally.
+
+After successful provisioning (`SYS:MODE=STA` or `CFG:APPLY`), the device saves a
+`wifi_prov` flag in NVS. On subsequent reboots it boots directly into STA work mode
+and connects to the saved router and upstream TCP server.
+
+To re-enter AP config mode at runtime, send `SYS:MODE=AP`.
 
 ## STA Work Mode
 
@@ -100,13 +106,20 @@ This writes the current config to `device_nvs`, but does not switch modes immedi
 SYS:MODE=STA
 ```
 
+Or use the one-step apply command:
+
+```text
+CFG:APPLY
+```
+
 This will:
 
-1. Save the current config to NVS if needed
-2. Leave AP config mode
-3. Switch to STA work mode
-4. Connect to the configured Wi-Fi router
-5. Connect to the configured TCP server
+1. Save the current config to NVS
+2. Mark the device as provisioned (`wifi_prov=1`)
+3. Leave AP config mode
+4. Switch to STA work mode
+5. Connect to the configured Wi-Fi router
+6. Connect to the configured TCP server
 
 ### Return to AP config mode
 
@@ -125,7 +138,7 @@ SYS:STATUS
 Example response:
 
 ```text
-SYS:STATUS,MODE=AP,STA=DISCONNECTED,TCP=DISCONNECTED,TRIAL=IDLE
+SYS:STATUS,MODE=AP,STA=DISCONNECTED,TCP=DISCONNECTED,TRIAL=IDLE,PROVISIONED=NO
 ```
 
 ## Recommended Config Flow
@@ -139,9 +152,10 @@ CFG:WIFI_SSID=your_router
 CFG:WIFI_PASSWORD=your_password
 CFG:SERVER_IP=192.168.1.125
 CFG:SERVER_PORT=9000
-CFG:SAVE
 SYS:MODE=STA
 ```
+
+Or replace the last line with `CFG:APPLY`.
 
 4. The device switches to STA work mode
 5. If connect fails, wait about 30 seconds for auto rollback
@@ -169,3 +183,4 @@ The project uses a dedicated `device_nvs` partition to store:
 - device SN
 - router SSID/password
 - upstream server IP/port
+- provisioned flag (`wifi_prov`)

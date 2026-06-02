@@ -44,6 +44,7 @@
 #define DEVICE_WIFI_PASSWORD_KEY "wifi_pwd"
 #define DEVICE_SERVER_IP_KEY "server_ip"
 #define DEVICE_SERVER_PORT_KEY "server_port"
+#define DEVICE_PROVISIONED_KEY "wifi_prov"
 
 #define DEVICE_SN_MAX_LEN 32
 #define WIFI_SSID_MAX_LEN 32
@@ -99,6 +100,7 @@ static volatile bool s_reconnect_requested = false;
 static volatile bool s_wifi_reconnect_requested = false;
 static volatile bool s_sta_connected = false;
 static volatile bool s_wifi_trial_active = false;
+static volatile bool s_local_tcp_server_stop_requested = false;
 
 static int tcp_sock = -1;
 static int s_local_listen_sock = -1;
@@ -110,11 +112,14 @@ static device_runtime_config_t s_runtime_config;
 static device_runtime_config_t s_last_good_config;
 static device_runtime_config_t s_pre_apply_config;
 static bool s_pre_apply_config_valid = false;
+static bool s_device_provisioned = false;
 
 static esp_err_t save_sn_to_nvs(const char *sn);
 static esp_err_t load_sn_from_nvs(char *sn, size_t len);
 static esp_err_t load_device_config_from_nvs(void);
 static esp_err_t save_device_config_to_nvs(void);
+static esp_err_t set_device_provisioned(bool provisioned);
+static bool is_device_provisioned(void);
 static void load_default_device_config(void);
 static void init_nvs_safe(void);
 static void ensure_wifi_stack_initialized(void);
@@ -130,6 +135,7 @@ static void request_runtime_reconnect(bool wifi_changed, bool server_changed);
 static void maybe_rollback_wifi_config(void);
 static void local_tcp_server_task(void *param);
 static void process_local_tcp_command(int client_sock, char *line_buf, int *line_len);
+static void close_local_client_sock(int sock);
 
 /* Shared Wi-Fi logging hook. */
 void mywifi_log(const char *fmt, ...)
@@ -235,6 +241,14 @@ static esp_err_t load_device_config_from_nvs(void)
         s_runtime_config.server_port = saved_port;
     }
 
+    {
+        uint8_t provisioned = 0;
+        if (nvs_get_u8(nvs, DEVICE_PROVISIONED_KEY, &provisioned) == ESP_OK)
+        {
+            s_device_provisioned = provisioned != 0;
+        }
+    }
+
     nvs_close(nvs);
 
     if (s_runtime_config.wifi_password[0] == '\0')
@@ -288,6 +302,34 @@ static esp_err_t save_device_config_to_nvs(void)
 
     nvs_close(nvs);
     return err;
+}
+
+static esp_err_t set_device_provisioned(bool provisioned)
+{
+    nvs_handle_t nvs;
+    esp_err_t err = nvs_open_from_partition(DEVICE_NVS_PART, DEVICE_NVS_NS, NVS_READWRITE, &nvs);
+    if (err != ESP_OK)
+    {
+        return err;
+    }
+
+    err = nvs_set_u8(nvs, DEVICE_PROVISIONED_KEY, provisioned ? 1 : 0);
+    if (err == ESP_OK)
+    {
+        err = nvs_commit(nvs);
+    }
+
+    nvs_close(nvs);
+    if (err == ESP_OK)
+    {
+        s_device_provisioned = provisioned;
+    }
+    return err;
+}
+
+static bool is_device_provisioned(void)
+{
+    return s_device_provisioned;
 }
 
 /* Initialize default NVS and the custom device_nvs partition safely. */
@@ -353,27 +395,50 @@ static void apply_wifi_ap_config(void)
     ESP_LOGI(TAG, "SoftAP ready: ssid=%s", DEFAULT_AP_SSID);
 }
 
+/* Close a local TCP client socket once (avoid double-close with stop_local_tcp_server). */
+static void close_local_client_sock(int sock)
+{
+    if (sock < 0 || s_local_client_sock != sock)
+    {
+        return;
+    }
+
+    s_local_client_sock = -1;
+    shutdown(sock, SHUT_RDWR);
+    close(sock);
+}
+
 static void stop_local_tcp_server(void)
 {
+    s_local_tcp_server_stop_requested = true;
+
     if (s_local_client_sock >= 0)
     {
-        shutdown(s_local_client_sock, SHUT_RDWR);
-        close(s_local_client_sock);
-        s_local_client_sock = -1;
+        close_local_client_sock(s_local_client_sock);
     }
 
     if (s_local_listen_sock >= 0)
     {
-        shutdown(s_local_listen_sock, SHUT_RDWR);
-        close(s_local_listen_sock);
+        int listen_sock = s_local_listen_sock;
         s_local_listen_sock = -1;
+        shutdown(listen_sock, SHUT_RDWR);
+        close(listen_sock);
+    }
+
+    /* Let the server task exit its recv/accept loop; do not vTaskDelete from here. */
+    for (int i = 0; i < 100 && s_local_tcp_server_task_handle != NULL; i++)
+    {
+        vTaskDelay(pdMS_TO_TICKS(20));
     }
 
     if (s_local_tcp_server_task_handle != NULL)
     {
+        ESP_LOGW(TAG, "Local TCP server task stuck, forcing delete");
         vTaskDelete(s_local_tcp_server_task_handle);
         s_local_tcp_server_task_handle = NULL;
     }
+
+    s_local_tcp_server_stop_requested = false;
 }
 
 static void switch_to_ap_config_mode(void)
@@ -522,8 +587,16 @@ static void wifi_init_sta(void)
     }
 
     ensure_wifi_stack_initialized();
-    switch_to_ap_config_mode();
-    ESP_LOGI(TAG, "wifi_init finished");
+    if (is_device_provisioned())
+    {
+        switch_to_sta_work_mode();
+        ESP_LOGI(TAG, "wifi_init finished (STA work mode, provisioned)");
+    }
+    else
+    {
+        switch_to_ap_config_mode();
+        ESP_LOGI(TAG, "wifi_init finished (AP config mode)");
+    }
 }
 
 /* Enter OTA mode and start the HTTP OTA task after Wi-Fi is ready. */
@@ -657,6 +730,13 @@ static bool handle_system_command(const char *input, char *output, int maxlen)
             return true;
         }
 
+        err = set_device_provisioned(true);
+        if (err != ESP_OK)
+        {
+            snprintf(output, maxlen, "SYS:ERR,MODE\r\n");
+            return true;
+        }
+
         request_runtime_reconnect(s_pending_wifi_config_change, s_pending_server_config_change);
         s_pending_wifi_config_change = false;
         s_pending_server_config_change = false;
@@ -682,11 +762,12 @@ static bool handle_system_command(const char *input, char *output, int maxlen)
         snprintf(
             output,
             maxlen,
-            "SYS:STATUS,MODE=%s,STA=%s,TCP=%s,TRIAL=%s\r\n",
+            "SYS:STATUS,MODE=%s,STA=%s,TCP=%s,TRIAL=%s,PROVISIONED=%s\r\n",
             s_run_mode == WIFI_RUN_MODE_STA_WORK ? "STA" : "AP",
             s_sta_connected ? "CONNECTED" : "DISCONNECTED",
             tcp_connected ? "CONNECTED" : "DISCONNECTED",
-            s_wifi_trial_active ? "ACTIVE" : "IDLE");
+            s_wifi_trial_active ? "ACTIVE" : "IDLE",
+            s_device_provisioned ? "YES" : "NO");
         return true;
     }
 
@@ -1123,16 +1204,17 @@ static void local_tcp_server_task(void *param)
     while (1)
     {
         client_sock = accept(listen_sock, (struct sockaddr *)&client_addr, &client_addr_len);
-        s_local_client_sock = client_sock;
         if (client_sock < 0)
         {
-            if (s_run_mode != WIFI_RUN_MODE_AP_CONFIG)
+            if (s_local_tcp_server_stop_requested || s_run_mode != WIFI_RUN_MODE_AP_CONFIG)
             {
                 break;
             }
             ESP_LOGE(TAG, "Local TCP server accept failed: errno=%d", errno);
             continue;
         }
+
+        s_local_client_sock = client_sock;
 
         char client_ip[INET_ADDRSTRLEN] = {0};
         inet_ntop(AF_INET, &client_addr.sin_addr, client_ip, sizeof(client_ip));
@@ -1141,11 +1223,14 @@ static void local_tcp_server_task(void *param)
 
         while (1)
         {
+            if (s_local_tcp_server_stop_requested)
+            {
+                break;
+            }
+
             int len = recv(client_sock, rx_buf, sizeof(rx_buf), 0);
-            bool saw_newline = false;
             if (len <= 0)
             {
-                process_local_tcp_command(client_sock, line_buf, &line_len);
                 ESP_LOGW(TAG, "Local TCP client disconnected");
                 break;
             }
@@ -1160,7 +1245,6 @@ static void local_tcp_server_task(void *param)
 
                 if (c == '\n')
                 {
-                    saw_newline = true;
                     process_local_tcp_command(client_sock, line_buf, &line_len);
                     continue;
                 }
@@ -1170,24 +1254,22 @@ static void local_tcp_server_task(void *param)
                     line_buf[line_len++] = c;
                 }
             }
-
-            if (!saw_newline && line_len > 0)
-            {
-                process_local_tcp_command(client_sock, line_buf, &line_len);
-            }
         }
 
-        shutdown(client_sock, SHUT_RDWR);
-        close(client_sock);
-        s_local_client_sock = -1;
+        close_local_client_sock(client_sock);
+        client_sock = -1;
     }
 
     if (listen_sock >= 0)
     {
+        if (s_local_listen_sock == listen_sock)
+        {
+            s_local_listen_sock = -1;
+        }
+        shutdown(listen_sock, SHUT_RDWR);
         close(listen_sock);
     }
     s_local_client_sock = -1;
-    s_local_listen_sock = -1;
     s_local_tcp_server_task_handle = NULL;
     vTaskDelete(NULL);
 }
