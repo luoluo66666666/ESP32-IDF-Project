@@ -225,6 +225,7 @@ int mode4_zhongyao_v2(void)
 
     while (true)
     {
+        /* 停止优先：避免在水温门控等等待时无法响应 CMD:STOP */
         if (mode_stop_requested())
         {
             return mode4_abort_exit("stop requested");
@@ -233,6 +234,7 @@ int mode4_zhongyao_v2(void)
         if (time_cnt == 0)
         {
             MODE4_LOGI("enter status:%d", status);
+            /* 出水步进入时读一次 485；失败或未达标则整模式退出 */
             if (mode4_water_temp_gate(status) != 0)
             {
                 return mode4_abort_exit("temp or 485 fault");

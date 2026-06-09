@@ -1657,6 +1657,7 @@ static void generate_sn(char *sn, size_t len) /* sn：输出缓冲；len：缓�
     snprintf(sn, len, "SN_%02X%02X%02X%02X%02X%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
+/* 按芯片 MAC 生成 SN_xxx，与 NVS 不一致时以芯片为准并写回 NVS */
 static void refresh_device_sn_from_chip(void)
 {
     char previous[DEVICE_SN_MAX_LEN] = {0};
@@ -1679,6 +1680,7 @@ static void refresh_device_sn_from_chip(void)
     }
 }
 
+/* 读取编译进固件的版本号；读不到时返回 "1.0.0" */
 static const char *get_firmware_version_string(void)
 {
     const esp_app_desc_t *app = esp_app_get_description();
@@ -1691,7 +1693,7 @@ static const char *get_firmware_version_string(void)
     return "1.0.0";
 }
 
-/* 发往云端 TCP：去掉末尾 \\r\\n 后统一补一个 \\n（应答与主动推送共用） */
+/* 发往云端 TCP：去掉末尾 \\r\\n 后统一补一个 \\n（命令应答与 RS485/DI 主动推送共用） */
 static void tcp_sock_send_line(int sock, const void *data, size_t data_len)
 {
     char tx_buf[QUEUE_ITEM_SIZE + 4] = {0};
@@ -1704,19 +1706,20 @@ static void tcp_sock_send_line(int sock, const void *data, size_t data_len)
 
     if (n >= sizeof(tx_buf) - 2)
     {
-        n = sizeof(tx_buf) - 2;
+        n = sizeof(tx_buf) - 2; /* 预留换行符空间 */
     }
 
     memcpy(tx_buf, data, n);
     while (n > 0 && (tx_buf[n - 1] == '\n' || tx_buf[n - 1] == '\r'))
     {
-        n--;
+        n--; /* 去掉已有换行，避免重复 */
     }
 
-    tx_buf[n++] = '\n';
+    tx_buf[n++] = '\n'; /* 服务器按行解析，必须有 \\n */
     send(sock, tx_buf, n, 0);
 }
 
+/* 发送一整行明文（内部走 tcp_sock_send_line） */
 static void send_tcp_line(int sock, const char *line)
 {
     if (line == NULL || line[0] == '\0')
@@ -1727,6 +1730,11 @@ static void send_tcp_line(int sock, const char *line)
     tcp_sock_send_line(sock, line, strlen(line));
 }
 
+/*
+ * 云端 TCP 连接/重连成功后主动上报设备在线
+ * 格式：REG|SN_xxx|固件版本（一行，带 \\n）
+ * 服务器可回 REG,OK，设备会忽略
+ */
 static void send_cloud_device_registration(int sock)
 {
     char line[160] = {0};
@@ -1736,6 +1744,10 @@ static void send_cloud_device_registration(int sock)
     ESP_LOGI(TAG, "Cloud TX (register): %s", line);
 }
 
+/*
+ * AP 配网模式：手机连 192.168.4.1:9000 后主动推送设备码
+ * 格式：CMD:SN,OK,SN=SN_xxx（与 BLE Notify 一致）
+ */
 static void send_local_device_sn_announcement(int sock)
 {
     char response[QUEUE_ITEM_SIZE] = {0};
@@ -1751,20 +1763,27 @@ static void init_device_sn(void)
     refresh_device_sn_from_chip();
 }
 
+/* 获取当前设备 ID 字符串（SN_ + 12 位 MAC 十六进制） */
 const char *wifi_module_get_device_sn(void)
 {
     return device_sn;
 }
 
+/* 查询 STA 云端 TCP 是否已 connect 成功 */
 bool wifi_module_tcp_is_connected(void)
 {
     return tcp_connected;
 }
 
+/*
+ * 主动推送一行到云端（RS485,ERR / DI,DIx=n / TEMP,ERR 等）
+ * 入队 wifi_tx_queue，由 tcp_client_task 取出并 tcp_sock_send_line 发送
+ */
 void wifi_module_tcp_push_line(const char *line)
 {
     wifi_data_t tx = {0};
 
+    /* 未连云端或参数无效时不推送 */
     if (line == NULL || line[0] == '\0' || wifi_tx_queue == NULL || !tcp_connected)
     {
         return;
@@ -1801,9 +1820,9 @@ void wifi_tcp_start(void)
     wifi_init_mode();
     wifi_ota_task_init();
 
-    mode_ctrl_set_event_push_cb(wifi_module_tcp_push_line);
-    temp_set_event_push_cb(wifi_module_tcp_push_line);
-    modbus_set_event_push_cb(wifi_module_tcp_push_line);
+    mode_ctrl_set_event_push_cb(wifi_module_tcp_push_line); /* DI 状态变化 */
+    temp_set_event_push_cb(wifi_module_tcp_push_line);      /* 水温未达标等 */
+    modbus_set_event_push_cb(wifi_module_tcp_push_line);    /* 485 通信失败 */
 
     xTaskCreate(wifi_protocol_task, "wifi_proto", 4096, NULL, 6, NULL);
     xTaskCreate(tcp_client_task, "tcp_client", 4096, NULL, 5, NULL);

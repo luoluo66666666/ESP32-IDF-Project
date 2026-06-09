@@ -17,7 +17,7 @@ typedef enum {
     MODBUS_FC_WRITE_MULTIPLE_REGISTERS = 0x10
 } modbus_function_code_t;
 
-typedef void (*modbus_event_push_fn)(const char *line);
+typedef void (*modbus_event_push_fn)(const char *line); /* 485 失败时推送 RS485,ERR 的回调类型 */
 
 /** 注册 TCP 推送回调（485 通信失败时推送 RS485,ERR） */
 void modbus_set_event_push_cb(modbus_event_push_fn fn);

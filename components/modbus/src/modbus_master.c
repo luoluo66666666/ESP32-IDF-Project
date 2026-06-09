@@ -10,6 +10,12 @@
 
 #include "modbus_master.h"
 
+/*
+ * Modbus RTU 主站（RS485）
+ * - 读/写寄存器失败时通过 modbus_report_comm_error 推送 RS485,ERR
+ * - 回调由 wifi_tcp_start → modbus_set_event_push_cb 注册
+ */
+
 #define TAG "MODBUS"
 #define MODBUS_UART_PORT (CONFIG_ECHO_UART_PORT_NUM)
 #define MODBUS_UART_TXD (CONFIG_ECHO_UART_TXD)
@@ -18,11 +24,12 @@
 #define MODBUS_UART_BAUD (CONFIG_ECHO_UART_BAUD_RATE)
 #define MODBUS_RESPONSE_TIMEOUT_MS 2000
 
-static void *s_master_handle = NULL;
-static SemaphoreHandle_t s_modbus_mutex = NULL;
-static bool s_modbus_initialized = false;
-static modbus_event_push_fn s_modbus_push_fn = NULL;
+static void *s_master_handle = NULL;              /* Modbus 主站句柄 */
+static SemaphoreHandle_t s_modbus_mutex = NULL;   /* 485 收发互斥锁 */
+static bool s_modbus_initialized = false;         /* 是否已完成 UART/主站初始化 */
+static modbus_event_push_fn s_modbus_push_fn = NULL; /* TCP 推送回调（失败时推 RS485,ERR） */
 
+/* 注册 TCP 推送回调，由 wifi_tcp_start 传入 wifi_module_tcp_push_line */
 void modbus_set_event_push_cb(modbus_event_push_fn fn)
 {
     s_modbus_push_fn = fn;
@@ -191,7 +198,7 @@ esp_err_t modbus_read_holding_registers(uint8_t slave_addr, uint16_t reg_start,
     err = mbc_master_send_request(s_master_handle, &req, buffer);
     modbus_unlock();
     if (err != ESP_OK) {
-        modbus_report_comm_error(err);
+        modbus_report_comm_error(err); /* 超时/无应答 → 推 RS485,ERR */
     }
     return err;
 }

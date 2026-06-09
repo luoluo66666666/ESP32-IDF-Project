@@ -115,8 +115,9 @@ void app_main(void)
     // Wifi_task();          // 启动 WiFi 模块
     wifi_tcp_start();
 
-    /* 后台监测任务：DI 输入 / 水温（洗涤模式只读缓存，不在模式内采样） */
+    /* 后台 DI 监测（100ms）；485/水温改为用时读取，不再后台轮询 temp_mon */
     xTaskCreate(di_input_monitor_task, "di_mon", 3072, NULL, 6, NULL);
+    /* temp_monitor_task 已改为按需读 485，默认不创建 */
     // xTaskCreate(temp_monitor_task, "temp_mon", 3072, NULL, 5, NULL);
 
     ble_task();

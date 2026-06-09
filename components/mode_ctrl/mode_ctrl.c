@@ -356,6 +356,7 @@ uint8_t di_alarm_rising_edge(uint8_t last_alarm, uint8_t cur_alarm)
     return (uint8_t)(cur_alarm & (uint8_t)~last_alarm);
 }
 
+/** 格式化为 TCP 主动推送单行：DI,DIx=0|1（电平变化时推送，含义由上位机判断） */
 int format_di_push_line(int channel, int level, char *buf, size_t buf_len)
 {
     if (buf == NULL || buf_len == 0)
@@ -377,6 +378,7 @@ int format_di_push_line(int channel, int level, char *buf, size_t buf_len)
     return 0;
 }
 
+/* 格式化为 CMD:DI_GET / CMD:MODE_GET 的 ERR 字段（仅报警角色 DI） */
 int format_di_alarm_err(uint8_t raw_di, char *buf, size_t buf_len)
 {
     size_t pos = 0;
@@ -408,14 +410,16 @@ int format_di_alarm_err(uint8_t raw_di, char *buf, size_t buf_len)
     return pos > 0 ? 1 : 0;
 }
 
-static volatile uint8_t s_di_cached_raw  = 0;
-static volatile bool s_di_pause_hold   = false;
+static volatile uint8_t s_di_cached_raw = 0; /* 监测任务缓存的 6 路 DI 位图 */
+static volatile bool s_di_pause_hold   = false; /* 暂停键按住时为 true */
 
+/* 供洗涤模式 / CMD:DI_GET 读取 DI 缓存 */
 uint8_t di_get_cached_inputs(void)
 {
     return s_di_cached_raw;
 }
 
+/* 暂停键是否按住（洗涤流程可据此不推进计时） */
 bool di_is_pause_hold(void)
 {
     return s_di_pause_hold;
@@ -487,14 +491,14 @@ void di_input_monitor_task(void *param)
 
     while (1)
     {
-        uint8_t raw     = read_all_inputs();
-        uint8_t changed = (uint8_t)(raw ^ last_raw);
+        uint8_t raw     = read_all_inputs();       /* 6 路 DI 采样（含去抖） */
+        uint8_t changed = (uint8_t)(raw ^ last_raw); /* 与上次比，找出变化的位 */
 
-        s_di_cached_raw = raw;
+        s_di_cached_raw = raw; /* 写缓存，供 CMD:DI_GET / 洗涤模式读取 */
         cur_di          = raw;
         last_di         = raw;
 
-        di_pause_service(raw);
+        di_pause_service(raw); /* 暂停键：按住关 DO，松开恢复 */
 
         for (int i = 0; i < DI_CHANNEL_COUNT; i++)
         {
@@ -506,7 +510,7 @@ void di_input_monitor_task(void *param)
             int level = (raw & (1u << i)) ? 1 : 0;
             if (format_di_push_line(i, level, line, sizeof(line)) == 0)
             {
-                mode_ctrl_push_event(line);
+                mode_ctrl_push_event(line); /* 推 DI,DIx=0|1 到云端 TCP */
                 ESP_LOGI(TAG, "DI push: %s", line);
             }
         }
@@ -517,13 +521,15 @@ void di_input_monitor_task(void *param)
 }
 
 
-static mode_ctrl_event_push_fn s_event_push_fn = NULL;
+static mode_ctrl_event_push_fn s_event_push_fn = NULL; /* DI 等事件 TCP 推送回调 */
 
+/* 注册推送回调（wifi_tcp_start 中绑定 wifi_module_tcp_push_line） */
 void mode_ctrl_set_event_push_cb(mode_ctrl_event_push_fn fn)
 {
     s_event_push_fn = fn;
 }
 
+/* 推送一行到云端 TCP（DI,DIx=n 等）；未注册回调时仅打日志 */
 void mode_ctrl_push_event(const char *line)
 {
     if (line == NULL || line[0] == '\0')

@@ -7,16 +7,24 @@
 #include "freertos/task.h"
 #include "modbus_master.h"
 
-#define TAG "TEMP"
-#define TEMP_SLAVE_ADDR 0x01
-#define TEMP_ENABLE_REG 0x0000
-#define TEMP_SET_REG 0x0001
-#define TEMP_ENABLE_VALUE 0x00C0
-#define TEMP_TARGET_READ_REG 0x0001
-#define TEMP_WATER_TEMP_REG 0x0002
-#define TEMP_WATER_FLOW_REG 0x0003
-#define TEMP_INIT_RETRY_COUNT 3
+/*
+ * 恒温器（Modbus 从站 0x01）水温读写与门控缓存
+ * - 485 失败：modbus 层推 RS485,ERR
+ * - 读通但未达标：temp_push_not_ready_once 推 TEMP,ERR,NOT_READY,...
+ * - 不在后台轮询，洗涤/ temp 命令用时才读
+ */
 
+#define TAG "TEMP"
+#define TEMP_SLAVE_ADDR 0x01          /* 恒温器 Modbus 从站地址 */
+#define TEMP_ENABLE_REG 0x0000        /* 使能寄存器 */
+#define TEMP_SET_REG 0x0001           /* 目标温度写入寄存器 */
+#define TEMP_ENABLE_VALUE 0x00C0      /* 使能写入值 */
+#define TEMP_TARGET_READ_REG 0x0001   /* 目标温度读回寄存器 */
+#define TEMP_WATER_TEMP_REG 0x0002      /* 当前出水温度寄存器 */
+#define TEMP_WATER_FLOW_REG 0x0003      /* 出水流量寄存器 */
+#define TEMP_INIT_RETRY_COUNT 3         /* 上电默认目标温度写入重试次数 */
+
+/* 读一次 Modbus，填充水温/目标温/允许上下限（供门控与 temp water 命令使用） */
 esp_err_t temp_read_water_status(temp_water_status_t *status)
 {
     uint16_t target = TEMP_DEFAULT_TARGET_C;
@@ -47,6 +55,7 @@ esp_err_t temp_read_water_status(temp_water_status_t *status)
     return ESP_OK;
 }
 
+/* 判断当前水温是否在 [min_c, max_c] 内 */
 bool temp_is_water_ready(const temp_water_status_t *status)
 {
     if (status == NULL)
@@ -57,6 +66,7 @@ bool temp_is_water_ready(const temp_water_status_t *status)
     return status->water_c >= status->min_c && status->water_c <= status->max_c;
 }
 
+/* 格式化为 TCP 推送行：TEMP,ERR,NOT_READY,CUR=..,TARGET=..,MIN=..,MAX=.. */
 int temp_format_not_ready_line(char *buf, size_t buf_len, const temp_water_status_t *status)
 {
     if (buf == NULL || buf_len == 0 || status == NULL)
@@ -73,6 +83,7 @@ int temp_format_not_ready_line(char *buf, size_t buf_len, const temp_water_statu
                     status->max_c);
 }
 
+/* 格式化为 TCP 推送行：TEMP,ERR,READ_FAIL（保留接口，485 失败现由 modbus 推 RS485,ERR） */
 int temp_format_read_fail_line(char *buf, size_t buf_len)
 {
     if (buf == NULL || buf_len == 0)
@@ -83,15 +94,18 @@ int temp_format_read_fail_line(char *buf, size_t buf_len)
     return snprintf(buf, buf_len, "TEMP,ERR,READ_FAIL");
 }
 
-static temp_event_push_fn s_temp_push_fn = NULL;
-static volatile bool s_temp_read_ok      = false;
-static volatile bool s_temp_water_ready  = false;
-static temp_water_status_t s_temp_cached = {0};
+static temp_event_push_fn s_temp_push_fn = NULL;   /* 云端 TCP 推送回调 */
+static volatile bool s_temp_read_ok      = false;  /* 最近一次 485 读是否成功 */
+static volatile bool s_temp_water_ready  = false;  /* 最近一次读通且温度在范围内 */
+static temp_water_status_t s_temp_cached = {0};    /* 最近一次成功采样的水温状态 */
+
+/* 注册 TCP 推送回调（与 mode_ctrl / modbus 共用 wifi_module_tcp_push_line） */
 void temp_set_event_push_cb(temp_event_push_fn fn)
 {
     s_temp_push_fn = fn;
 }
 
+/* 内部：推送一行到已注册的 TCP 回调 */
 static void temp_push_event_line(const char *line)
 {
     if (line == NULL || line[0] == '\0')
@@ -109,11 +123,13 @@ static void temp_push_event_line(const char *line)
     }
 }
 
+/* 洗涤门控用：读成功且水温在目标±容差内才返回 true */
 bool temp_get_water_ready(void)
 {
     return s_temp_read_ok && s_temp_water_ready;
 }
 
+/* 取监测缓存（读失败时返回 ESP_FAIL） */
 esp_err_t temp_get_cached_status(temp_water_status_t *status)
 {
     if (status == NULL)
@@ -130,6 +146,7 @@ esp_err_t temp_get_cached_status(temp_water_status_t *status)
     return ESP_OK;
 }
 
+/* 主动读 485 并更新 s_temp_* 缓存；失败时 modbus 层会推 RS485,ERR */
 esp_err_t temp_refresh_cache(void)
 {
     temp_water_status_t st = {0};
@@ -251,7 +268,7 @@ esp_err_t temp_read_water_temp_flow(uint16_t regs[3])
     return modbus_read_holding_registers(TEMP_SLAVE_ADDR, TEMP_WATER_TEMP_REG, 3, regs);
 }
 
-/* 初始化恒温器默认目标温度 */
+/* 上电默认目标温度写入（main 调用；失败仅打日志，不推 TCP） */
 esp_err_t temp_init_default_target(void)
 {
     esp_err_t err = ESP_FAIL;
