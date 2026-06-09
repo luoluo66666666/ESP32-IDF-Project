@@ -698,6 +698,18 @@ void ctrl_protocol_init(void)
 void ctrl_protocol(char *input, char *output, int maxlen)
 {
     trim_command(input);
+
+    /* 桥接层控制行（各通道均可能收到），静默忽略，不影响洗涤模式 */
+    if (strncmp(input, "ERR|", 4) == 0 || strncmp(input, "EVENT|", 6) == 0)
+    {
+        ESP_LOGW(TAG, "Ignoring bridge control: %s", input);
+        if (output != NULL && maxlen > 0)
+        {
+            output[0] = '\0';
+        }
+        return;
+    }
+
     ESP_LOGI(TAG, "Received command: %s", input);
 
     if (wifi_module_handle_config_command(input, output, maxlen))

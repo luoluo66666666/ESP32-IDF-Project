@@ -56,7 +56,7 @@
     "text_encoding": "c"
   },
   "idf.flashType": "UART",
-  "idf.portWin": "COM5",
+  "idf.portWin": "COM16",
   "python-envs.defaultEnvManager": "ms-python.python:system",
   "python-envs.pythonProjects": [],
   "idf.pythonInstallPath": "d:\\ESP.SSIF\\tools\\idf-python\\3.11.2\\python.exe",
