@@ -2,6 +2,8 @@
 #include "driver/gpio.h"
 #include "soc/gpio_reg.h"
 #include "esp_log.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <stdio.h>
 #include <inttypes.h>
 #include "gatt_svc.h"
@@ -53,23 +55,37 @@ int do_pin[DO_PIN_NUM] = {
 };
 
 /*
- * DI 映射表（软件下标 di_pin[0..5] ↔ 板级 MCU_DI_xx ↔ GPIO）
- * 读取：get_di_pin(n)；暂停键等为 di_pin[2]（MODE 里常用）。
+ * DI 硬件映射（软件下标 di_pin[0..5] ↔ MCU_DI_xx ↔ GPIO）
+ * 各路「报警 / 暂停 / 普通」由下方 di_role_config[] 配置，与此表独立。
  */
 int di_pin[] = {
-    GPIO_NUM_4,  /* [0] MCU_DI_0  跨循环锁定 */
-    GPIO_NUM_5,  /* [1] MCU_DI_1  跨循环锁定 */
-    GPIO_NUM_6,  /* [2] MCU_DI_2  暂停键 */
-    GPIO_NUM_7,  /* [3] MCU_DI_3  流量脉冲（sensor_init 未启用时仅普通输入） */
-    GPIO_NUM_15, /* [4] MCU_DI_4  水位等（mode_test） */
-    GPIO_NUM_16, /* [5] MCU_DI_5  数字输入 */
+    GPIO_NUM_4,  /* [0] MCU_DI_0 */
+    GPIO_NUM_5,  /* [1] MCU_DI_1 */
+    GPIO_NUM_6,  /* [2] MCU_DI_2 */
+    GPIO_NUM_7,  /* [3] MCU_DI_3 流量脉冲 */
+    GPIO_NUM_15, /* [4] MCU_DI_4 水位等 */
+    GPIO_NUM_16, /* [5] MCU_DI_5 */
+};
+
+/*-----------------------------------------------------------
+ * DI 功能配置表 — 按通道下标填入 di_role_t 数字
+ *
+ * 0 = DI_ROLE_NONE   普通输入
+ * 1 = DI_ROLE_ALARM  报警（设备侧不暂停洗涤；TCP 推送见 format_di_push_line）
+ * 2 = DI_ROLE_PAUSE  暂停（按住关 DO，松开恢复；TCP 推送见 format_di_push_line）
+ *----------------------------------------------------------*/
+const uint8_t di_role_config[DI_CHANNEL_COUNT] = {
+    DI_ROLE_ALARM, /* [0] DI0 */
+    DI_ROLE_ALARM, /* [1] DI1 */
+    DI_ROLE_PAUSE, /* [2] DI2 暂停键 */
+    DI_ROLE_ALARM,  /* [3] DI3 */
+    DI_ROLE_NONE,  /* [4] DI4 */
+    DI_ROLE_NONE,  /* [5] DI5 */
 };
 
 static const char *TAG = "MODE_CTRL";
-static const char *FLOW = "flow_sensor";
 
 // ================== 全局定义 ==================
-#define TAG "SENSOR"
 #define IO_DEBUG_ENABLE 0
 
 #if IO_DEBUG_ENABLE
@@ -78,23 +94,6 @@ static const char *FLOW = "flow_sensor";
 #define IO_LOGI(...)
 #endif
 
-#define VREF 3300
-#define R_FIXED 50000.0f  // 分压电阻
-#define ALPHA 0.2f        // 指数滤波系数
-#define MOVING_AVG_LEN 10 // 滑动平均窗口大小
-
-// ---------- 手动电压校准 ----------
-#define V_CAL_MCU 1.54f                              // MCU 实测电压
-#define V_CAL_REAL 1.60f                             // 万用表实际电压
-#define V_CORRECTION_FACTOR (V_CAL_REAL / V_CAL_MCU) // 校准系数
-
-// 流量传感器参数
-volatile uint32_t flow_pulse_count = 0;
-static uint64_t last_pulse_time_us = 0;
-#define MIN_PULSE_INTERVAL_US 40000 // 40ms 防抖（25Hz以上有效）
-#define PULSE_PER_L 660             // 每升水脉冲数
-#define FLOW_TASK_PERIOD_MS 1000    // 每秒统计一次
-
 // ADC 全局
 static adc_continuous_handle_t adc_handle = NULL;
 // static adc_cali_handle_t adc_cali_handle = NULL;
@@ -102,135 +101,6 @@ static adc_continuous_handle_t adc_handle = NULL;
 extern QueueHandle_t ble_tx_queue; // 由 BLE 模块提供
 extern uint16_t custom_chr_conn_handle;
 extern bool custom_notify_enabled;
-
-// ================== 流量计中断 ==================
-static void IRAM_ATTR flow_isr_handler(void *arg)
-{
-    uint64_t now = esp_timer_get_time();
-    if (now - last_pulse_time_us > MIN_PULSE_INTERVAL_US)
-    {
-        flow_pulse_count++;
-        last_pulse_time_us = now;
-    }
-}
-
-// NTC 转温度公式
-float ntc_resistance_to_temp(float r_ntc)
-{
-    const float T0 = 298.15f;  // 25℃ = 298.15K
-    const float R0 = 50000.0f; // 25℃ NTC 阻值
-    const float B = 3950.0f;   // Beta 值
-
-    float tempK = 1.0f / ((1.0f / T0) + (1.0f / B) * logf(r_ntc / R0));
-    return tempK - 273.15f; // 转摄氏度
-}
-
-#define SEND_INTERVAL_MS 5000 // 5 秒
-// // ================== 流量任务 ==================
-// void sensor_task(void *pvParameters)
-// {
-//     uint32_t last_count = 0;
-//     ble_data_t tx_data;
-//     TickType_t last_send_tick = 0;
-//     const TickType_t send_interval = pdMS_TO_TICKS(5000); // 5 秒发送一次
-//     bool queue_full_flag = false; // 队列满标志
-
-//     while (1)
-//     {
-//         vTaskDelay(pdMS_TO_TICKS(100));
-
-//         if ((xTaskGetTickCount() - last_send_tick) < send_interval)
-//             continue;
-
-//         uint32_t count = flow_pulse_count;
-//         uint32_t delta = count - last_count;
-//         last_count = count;
-
-//         float flow_l_min = (delta * 60.0f) / PULSE_PER_L;
-
-//         int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf),
-//                            "Pulse=%lu,Flow=%.2f", (unsigned long)delta, flow_l_min);
-//         tx_data.len = len;
-
-//         if (uxQueueSpacesAvailable(ble_tx_queue) > 0)
-//         {
-//             xQueueSend(ble_tx_queue, &tx_data, 0);
-//             last_send_tick = xTaskGetTickCount();
-//             queue_full_flag = false; // 队列有空，重置标志
-//             ESP_LOGI(TAG, "Flow queued: %s", tx_data.buf);
-//         }
-//         else
-//         {
-//             if (!queue_full_flag)
-//             {
-//                 ESP_LOGW(TAG, "BLE TX queue full, flow data dropped");
-//                 queue_full_flag = true; // 只打印一次
-//             }
-//         }
-//     }
-// }
-
-// // ================== NTC 任务 ==================
-// void ntc_task(void *pv)
-// {
-//     float v_filtered = 0.0f;
-//     TickType_t last_send_tick = 0;
-//     const TickType_t send_interval = pdMS_TO_TICKS(5000); // 5 秒发送一次
-//     bool queue_full_flag = false;
-
-//     while (1)
-//     {
-//         uint8_t result[READ_LEN];
-//         uint32_t ret_num = 0;
-
-//         if (adc_continuous_read(adc_handle, result, READ_LEN, &ret_num, 1000) == ESP_OK)
-//         {
-//             adc_digi_output_data_t *p = (adc_digi_output_data_t *)result;
-//             uint32_t adc_raw = p->type2.data;
-
-//             int voltage = 0;
-//             if (adc_cali_handle)
-//                 adc_cali_raw_to_voltage(adc_cali_handle, adc_raw, &voltage);
-//             else
-//                 voltage = (adc_raw * VREF) / 4095;
-
-//             float v = voltage / 1000.0f;
-//             if (v_filtered == 0.0f) v_filtered = v;
-//             v_filtered = ALPHA * v + (1 - ALPHA) * v_filtered;
-
-//             float v_corrected = v_filtered * V_CORRECTION_FACTOR;
-//             float r_ntc = (R_FIXED * v_corrected) / (3.3f - v_corrected);
-//             float tempC = ntc_resistance_to_temp(r_ntc);
-
-//             if ((xTaskGetTickCount() - last_send_tick) >= send_interval)
-//             {
-//                 if (uxQueueSpacesAvailable(ble_tx_queue) > 0)
-//                 {
-//                     ble_data_t tx_data;
-//                     int len = snprintf((char *)tx_data.buf, sizeof(tx_data.buf), "TEMP=%.2f", tempC);
-//                     tx_data.len = len;
-
-//                     xQueueSend(ble_tx_queue, &tx_data, 0);
-//                     last_send_tick = xTaskGetTickCount();
-//                     queue_full_flag = false; // 队列有空，重置标志
-
-//                     ESP_LOGI(TAG, "NTC queued: raw=%" PRIu32 ", Vcorr=%.3fV, T=%.2f°C",
-//                              adc_raw, v_corrected, tempC);
-//                 }
-//                 else
-//                 {
-//                     if (!queue_full_flag)
-//                     {
-//                         ESP_LOGW(TAG, "BLE TX queue full, temp dropped");
-//                         queue_full_flag = true; // 只打印一次
-//                     }
-//                 }
-//             }
-//         }
-
-//         vTaskDelay(pdMS_TO_TICKS(100));
-//     }
-// }
 
 /*******************************************************************************
 ****@brief 初始化所有 DO（输出）和 DI（输入）引脚
@@ -412,86 +282,261 @@ int get_di_pin(int index)
 }
 
 #define INPUT_NUM (sizeof(di_pin) / sizeof(di_pin[0]))
-#define STABLE_COUNT 3 // 稳定判断次数
+#define STABLE_COUNT 3 /**< 连续采样次数，全部为高才认为 DI 有效 */
+
+/**
+ * @brief 读取全部 DI 并去抖
+ * @return 位图，bitN=1 表示 DI N 稳定为高电平
+ */
 uint8_t read_all_inputs(void)
 {
-    uint8_t count[INPUT_NUM] = {0}; // 每路计数
+    uint8_t count[INPUT_NUM] = {0};
     uint8_t result = 0;
-    int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
-    int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
 
-    // 连续读取 STABLE_COUNT 次
     for (int n = 0; n < STABLE_COUNT; n++)
     {
         for (int i = 0; i < INPUT_NUM; i++)
         {
-            if (get_di_pin(i)) // 第 i 路为高
+            if (get_di_pin(i))
+            {
                 count[i]++;
+            }
         }
     }
-    // 判断每一路是否稳定
+
     for (int i = 0; i < INPUT_NUM; i++)
     {
         if (count[i] == STABLE_COUNT)
-            result |= (1 << i); // 连续高 → 置 1
-        // 否则保持为 0
+        {
+            result |= (uint8_t)(1u << i);
+        }
     }
 
-    return result; // 返回八位，每位对应一路输入
+    return result;
 }
 
-uint8_t input_state_change_handler(void)
+/** 生成某角色的通道位掩码（内部根据 di_role_config[] 计算） */
+static uint8_t di_role_bitmask(di_role_t role)
 {
+    uint8_t mask = 0;
 
-    int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
-    int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
-    // 读取当前稳定输入状态
-    cur_di = read_all_inputs();
-    last_di = cur_di;
-
-    // 暂停键 DI2 检测
-    if (cur_di & (1 << 2)) // 注意这里用 cur_di 替代未定义的 result
+    for (int i = 0; i < DI_CHANNEL_COUNT; i++)
     {
-        ESP_LOGI(TAG, "Paused");
-
-        // 保存 DO 状态并关闭
-        for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
+        if (di_role_config[i] == (uint8_t)role)
         {
-            do_level[i] = get_do_pin(i);
-            TURN_OFF(i);
+            mask |= (uint8_t)(1u << i);
         }
-
-        // 等待按键松开（实时更新 cur_di）
-        do
-        {
-            cur_di = read_all_inputs();
-            vTaskDelay(pdMS_TO_TICKS(100)); // 每 100 ms 检查一次
-        } while (cur_di & (1 << 2));
-
-        // 恢复 DO 状态
-        for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
-        {
-            set_do_pin(i, do_level[i]);
-        }
-
-        ESP_LOGI(TAG, "Resumed");
     }
 
-    return cur_di;
+    return mask;
+}
 
+di_role_t di_get_channel_role(int channel)
+{
+    if (channel < 0 || channel >= DI_CHANNEL_COUNT)
+    {
+        return DI_ROLE_NONE;
+    }
+
+    return (di_role_t)di_role_config[channel];
+}
+
+uint8_t di_alarm_extract(uint8_t raw_di)
+{
+    return (uint8_t)(raw_di & di_role_bitmask(DI_ROLE_ALARM));
+}
+
+bool di_alarm_any_active(uint8_t alarm_bits)
+{
+    return alarm_bits != 0;
+}
+
+uint8_t di_alarm_rising_edge(uint8_t last_alarm, uint8_t cur_alarm)
+{
+    return (uint8_t)(cur_alarm & (uint8_t)~last_alarm);
+}
+
+int format_di_push_line(int channel, int level, char *buf, size_t buf_len)
+{
+    if (buf == NULL || buf_len == 0)
+    {
+        return -1;
+    }
+
+    if (channel < 0 || channel >= DI_CHANNEL_COUNT)
+    {
+        return -1;
+    }
+
+    if (level != 0 && level != 1)
+    {
+        return -1;
+    }
+
+    snprintf(buf, buf_len, "DI,DI%d=%d", channel, level);
+    return 0;
+}
+
+int format_di_alarm_err(uint8_t raw_di, char *buf, size_t buf_len)
+{
+    size_t pos = 0;
+
+    if (buf == NULL || buf_len == 0)
+    {
+        return 0;
+    }
+
+    buf[0] = '\0';
+
+    for (int i = 0; i < DI_CHANNEL_COUNT; i++)
+    {
+        if (di_role_config[i] != DI_ROLE_ALARM)
+        {
+            continue;
+        }
+
+        if (raw_di & (1u << i))
+        {
+            pos += (size_t)snprintf(buf + pos, buf_len - pos, "%sDI,ERR,DI%d", pos > 0 ? "|" : "", i);
+            if (pos >= buf_len)
+            {
+                break;
+            }
+        }
+    }
+
+    return pos > 0 ? 1 : 0;
+}
+
+static volatile uint8_t s_di_cached_raw  = 0;
+static volatile bool s_di_pause_hold   = false;
+
+uint8_t di_get_cached_inputs(void)
+{
+    return s_di_cached_raw;
+}
+
+bool di_is_pause_hold(void)
+{
+    return s_di_pause_hold;
+}
+
+/** 是否有任意配置为「暂停」的 DI 当前为高 */
+static bool di_any_pause_pressed(uint8_t raw)
+{
+    uint8_t pause_mask = di_role_bitmask(DI_ROLE_PAUSE);
+
+    return (raw & pause_mask) != 0;
 }
 
 /**
- * @brief 判断跨循环锁定位（DI0~DI2）
- * @return 1 表示任意锁定位为1，本次任务不允许执行
- *         0 表示允许执行
+ * 暂停处理：由监测任务调用
+ * 按下 → 保存 DO 并全关；按住 → 保持全关；松开 → 恢复 DO
  */
-uint8_t check_cross_loop_lock(void)
+static void di_pause_service(uint8_t raw)
 {
-    if (cur_di & (1 << 0)) { ESP_LOGI(TAG, "DI0 锁定"); return 1; }
-    if (cur_di & (1 << 1)) { ESP_LOGI(TAG, "DI1 锁定"); return 1; }
-    if (cur_di & (1 << 2)) { ESP_LOGI(TAG, "DI2 锁定"); return 1; }
+    static bool in_pause          = false;
+    static int saved_do[DO_PIN_NUM] = {0};
+    bool pressed                  = di_any_pause_pressed(raw);
 
-    return 0; // 没有锁定，允许执行
+    if (pressed)
+    {
+        if (!in_pause)
+        {
+            for (size_t i = 0; i < DO_PIN_NUM; i++)
+            {
+                saved_do[i] = get_do_pin((int)i);
+            }
 
+            in_pause         = true;
+            s_di_pause_hold  = true;
+            ESP_LOGI(TAG, "DI pause pressed, holding outputs off");
+        }
+
+        for (size_t i = 0; i < DO_PIN_NUM; i++)
+        {
+            TURN_OFF((int)i);
+        }
+    }
+    else if (in_pause)
+    {
+        for (size_t i = 0; i < DO_PIN_NUM; i++)
+        {
+            set_do_pin((int)i, saved_do[i]);
+        }
+
+        in_pause        = false;
+        s_di_pause_hold = false;
+        ESP_LOGI(TAG, "DI pause released, outputs restored");
+    }
+}
+
+/**
+ * DI 输入监测任务（main 中 xTaskCreate 创建）
+ * 1. 采样去抖并写缓存
+ * 2. 按 di_role_config[] 处理暂停
+ * 3. 任一路 DI 电平变化时推送 DI,DIx=0|1（上位机自行判断含义）
+ */
+void di_input_monitor_task(void *param)
+{
+    uint8_t last_raw = 0;
+    char line[16]    = {0};
+
+    (void)param;
+    ESP_LOGI(TAG, "DI monitor started (roles from di_role_config[])");
+
+    while (1)
+    {
+        uint8_t raw     = read_all_inputs();
+        uint8_t changed = (uint8_t)(raw ^ last_raw);
+
+        s_di_cached_raw = raw;
+        cur_di          = raw;
+        last_di         = raw;
+
+        di_pause_service(raw);
+
+        for (int i = 0; i < DI_CHANNEL_COUNT; i++)
+        {
+            if (!(changed & (1u << i)))
+            {
+                continue;
+            }
+
+            int level = (raw & (1u << i)) ? 1 : 0;
+            if (format_di_push_line(i, level, line, sizeof(line)) == 0)
+            {
+                mode_ctrl_push_event(line);
+                ESP_LOGI(TAG, "DI push: %s", line);
+            }
+        }
+
+        last_raw = raw;
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+
+static mode_ctrl_event_push_fn s_event_push_fn = NULL;
+
+void mode_ctrl_set_event_push_cb(mode_ctrl_event_push_fn fn)
+{
+    s_event_push_fn = fn;
+}
+
+void mode_ctrl_push_event(const char *line)
+{
+    if (line == NULL || line[0] == '\0')
+    {
+        return;
+    }
+
+    if (s_event_push_fn != NULL)
+    {
+        s_event_push_fn(line);
+    }
+    else
+    {
+        ESP_LOGW(TAG, "event (no push cb): %s", line);
+    }
 }

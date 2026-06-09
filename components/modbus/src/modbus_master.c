@@ -21,6 +21,22 @@
 static void *s_master_handle = NULL;
 static SemaphoreHandle_t s_modbus_mutex = NULL;
 static bool s_modbus_initialized = false;
+static modbus_event_push_fn s_modbus_push_fn = NULL;
+
+void modbus_set_event_push_cb(modbus_event_push_fn fn)
+{
+    s_modbus_push_fn = fn;
+}
+
+/** 单次 485 收发失败：推送一行 RS485,ERR（每次失败各推一次，不去重） */
+static void modbus_report_comm_error(esp_err_t err)
+{
+    ESP_LOGW(TAG, "RS485,ERR (%s)", esp_err_to_name(err));
+    if (s_modbus_push_fn != NULL)
+    {
+        s_modbus_push_fn("RS485,ERR");
+    }
+}
 
 /* 获取 Modbus 锁 */
 static esp_err_t modbus_lock(TickType_t timeout_ticks)
@@ -161,6 +177,7 @@ esp_err_t modbus_read_holding_registers(uint8_t slave_addr, uint16_t reg_start,
 
     err = modbus_lock(pdMS_TO_TICKS(MODBUS_RESPONSE_TIMEOUT_MS + 200));
     if (err != ESP_OK) {
+        modbus_report_comm_error(err);
         return err;
     }
 
@@ -173,6 +190,9 @@ esp_err_t modbus_read_holding_registers(uint8_t slave_addr, uint16_t reg_start,
 
     err = mbc_master_send_request(s_master_handle, &req, buffer);
     modbus_unlock();
+    if (err != ESP_OK) {
+        modbus_report_comm_error(err);
+    }
     return err;
 }
 
@@ -186,6 +206,7 @@ esp_err_t modbus_write_single_register(uint8_t slave_addr, uint16_t reg_addr, ui
 
     err = modbus_lock(pdMS_TO_TICKS(MODBUS_RESPONSE_TIMEOUT_MS + 200));
     if (err != ESP_OK) {
+        modbus_report_comm_error(err);
         return err;
     }
 
@@ -199,6 +220,9 @@ esp_err_t modbus_write_single_register(uint8_t slave_addr, uint16_t reg_addr, ui
 
     err = mbc_master_send_request(s_master_handle, &req, &write_value);
     modbus_unlock();
+    if (err != ESP_OK) {
+        modbus_report_comm_error(err);
+    }
     return err;
 }
 
@@ -217,6 +241,7 @@ esp_err_t modbus_write_multiple_registers(uint8_t slave_addr, uint16_t reg_start
 
     err = modbus_lock(pdMS_TO_TICKS(MODBUS_RESPONSE_TIMEOUT_MS + 200));
     if (err != ESP_OK) {
+        modbus_report_comm_error(err);
         return err;
     }
 
@@ -229,6 +254,9 @@ esp_err_t modbus_write_multiple_registers(uint8_t slave_addr, uint16_t reg_start
 
     err = mbc_master_send_request(s_master_handle, &req, (void *)buffer);
     modbus_unlock();
+    if (err != ESP_OK) {
+        modbus_report_comm_error(err);
+    }
     return err;
 }
 

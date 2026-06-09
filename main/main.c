@@ -1,4 +1,6 @@
-﻿#include <stdio.h>
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "wifi_module.h"
 #include "Uart_module.h"
 #include "app_msg.h"
@@ -10,6 +12,7 @@
 #include <esp_log.h>
 #include "modbus.h"
 #include "ota_rollback.h"
+#include "temp.h"
 
 static const char *TAG = "current MODE";
 
@@ -111,14 +114,12 @@ void app_main(void)
     }
     // Wifi_task();          // 启动 WiFi 模块
     wifi_tcp_start();
-    // OTA：先 CFG:OTA_URL=http://... 再 CMD:OTA
 
-    ble_task(); // 启动 BLE 任务
-    // Temp_task();
-    // Temp_task();
-    // sensor_init();
-    // // 创建控制任务
-    // xTaskCreate(modbus_test_task, "modbus_test_task", 4096, NULL, 8, NULL);
+    /* 后台监测任务：DI 输入 / 水温（洗涤模式只读缓存，不在模式内采样） */
+    xTaskCreate(di_input_monitor_task, "di_mon", 3072, NULL, 6, NULL);
+    // xTaskCreate(temp_monitor_task, "temp_mon", 3072, NULL, 5, NULL);
+
+    ble_task();
     xTaskCreate(mode_control_task, "mode_ctrl", 4096, NULL, 10, NULL);
     xTaskCreate(Pole_motor_control_task, "Pole_motor_control", 4096, NULL, 10, NULL);
 

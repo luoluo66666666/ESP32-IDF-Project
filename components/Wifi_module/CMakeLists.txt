@@ -10,6 +10,8 @@ idf_component_register(
         nvs_flash
         lwip
         ctrl_protocol
+        mode_ctrl
+        modbus
         esp_app_format
         OTA
 )

@@ -1,4 +1,4 @@
-﻿#include <errno.h>
+#include <errno.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -25,6 +25,10 @@
 
 #include "Http_ota.h"
 #include "ctrl_protocol.h"
+#include "mode_ctrl.h"
+#include "modbus_master.h"
+#include "temp.h"
+#include "Wifi_module.h"
 
 /*
  * WiFi 模块说明（Wifi_manage.c）
@@ -1402,10 +1406,14 @@ void tcp_client_task(void *param) /* param：FreeRTOS 任务参数（未使用�
                 }
             }
 
-            wifi_data_t tx = {0}; /* 从发送队列取出的应答 */
-            if (xQueueReceive(wifi_tx_queue, &tx, 0) == pdTRUE)
+            wifi_data_t tx = {0}; /* 从发送队列取出的应答 / 主动推送 */
+            while (xQueueReceive(wifi_tx_queue, &tx, 0) == pdTRUE)
             {
-                send(sock, tx.buf, tx.len, 0);
+                if (tx.len > 0)
+                {
+                    tcp_sock_send_line(sock, tx.buf, tx.len);
+                    ESP_LOGI(TAG, "Cloud TX: %.*s", (int)tx.len, (char *)tx.buf);
+                }
             }
 
             if (s_reconnect_requested) /* 配置变更等需要重连云端 */
@@ -1683,23 +1691,40 @@ static const char *get_firmware_version_string(void)
     return "1.0.0";
 }
 
+/* 发往云端 TCP：去掉末尾 \\r\\n 后统一补一个 \\n（应答与主动推送共用） */
+static void tcp_sock_send_line(int sock, const void *data, size_t data_len)
+{
+    char tx_buf[QUEUE_ITEM_SIZE + 4] = {0};
+    size_t n                         = data_len;
+
+    if (sock < 0 || data == NULL || n == 0)
+    {
+        return;
+    }
+
+    if (n >= sizeof(tx_buf) - 2)
+    {
+        n = sizeof(tx_buf) - 2;
+    }
+
+    memcpy(tx_buf, data, n);
+    while (n > 0 && (tx_buf[n - 1] == '\n' || tx_buf[n - 1] == '\r'))
+    {
+        n--;
+    }
+
+    tx_buf[n++] = '\n';
+    send(sock, tx_buf, n, 0);
+}
+
 static void send_tcp_line(int sock, const char *line)
 {
-    char tx_buf[QUEUE_ITEM_SIZE] = {0};
-    size_t len                   = 0;
-
-    if (sock < 0 || line == NULL || line[0] == '\0')
+    if (line == NULL || line[0] == '\0')
     {
         return;
     }
 
-    len = snprintf(tx_buf, sizeof(tx_buf), "%s\n", line);
-    if (len == 0 || len >= sizeof(tx_buf))
-    {
-        return;
-    }
-
-    send(sock, tx_buf, len, 0);
+    tcp_sock_send_line(sock, line, strlen(line));
 }
 
 static void send_cloud_device_registration(int sock)
@@ -1731,6 +1756,37 @@ const char *wifi_module_get_device_sn(void)
     return device_sn;
 }
 
+bool wifi_module_tcp_is_connected(void)
+{
+    return tcp_connected;
+}
+
+void wifi_module_tcp_push_line(const char *line)
+{
+    wifi_data_t tx = {0};
+
+    if (line == NULL || line[0] == '\0' || wifi_tx_queue == NULL || !tcp_connected)
+    {
+        return;
+    }
+
+    snprintf((char *)tx.buf, sizeof(tx.buf), "%s", line);
+    tx.len = strnlen((char *)tx.buf, sizeof(tx.buf));
+    if (tx.len == 0 || tx.len >= sizeof(tx.buf))
+    {
+        return;
+    }
+
+    if (xQueueSend(wifi_tx_queue, &tx, 0) != pdTRUE)
+    {
+        ESP_LOGW(TAG, "TCP push queue full, dropped: %s", line);
+        return;
+    }
+
+    ESP_LOGI(TAG, "TCP push: %s", line);
+}
+
+
 /*
  * 模块入口（main 里调用）
  * 顺序：NVS → SN → 读配置 → 队列 → 按配网状态开 AP/STA → 起云端协议任务 + TCP 客户端
@@ -1744,6 +1800,10 @@ void wifi_tcp_start(void)
     wifi_module_queue_init();
     wifi_init_mode();
     wifi_ota_task_init();
+
+    mode_ctrl_set_event_push_cb(wifi_module_tcp_push_line);
+    temp_set_event_push_cb(wifi_module_tcp_push_line);
+    modbus_set_event_push_cb(wifi_module_tcp_push_line);
 
     xTaskCreate(wifi_protocol_task, "wifi_proto", 4096, NULL, 6, NULL);
     xTaskCreate(tcp_client_task, "tcp_client", 4096, NULL, 5, NULL);

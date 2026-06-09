@@ -8,9 +8,7 @@
 
 static const char *TAG = "MODE4_V2";
 
-#define MODE4_DEFAULT_TARGET_TEMP 39 // 默认目标温度
-#define MODE4_TEMP_TOLERANCE 5
-#define MODE4_LIGHT_GPIO GPIO_NUM_19 // 彩灯连接的 GPIO
+#define MODE4_LIGHT_GPIO GPIO_NUM_19 /* 彩灯 GPIO */
 #define MODE4_DEBUG_ENABLE 1
 
 #if MODE4_DEBUG_ENABLE
@@ -18,8 +16,6 @@ static const char *TAG = "MODE4_V2";
 #else
 #define MODE4_LOGI(...)
 #endif
-
-extern int di_pin[6];
 
 /* 初始化彩灯引脚 */
 static void mode4_light_init(void)
@@ -57,7 +53,7 @@ static void mode4_rinse_enter(void)
     TURN_ON(14);
 }
 
-/* 暂停：关闭水泵、阀门和加液输出 */
+/* 流程步间暂停：关闭水泵、阀门和加液输出（与 DI 报警无关） */
 static void mode4_pause_enter(void)
 {
     motor_stop();
@@ -137,32 +133,60 @@ static void mode4_motor_stop_enter(void)
     motor_stop();
 }
 
-/* 处理暂停，恢复前保持当前 DO 状态 */
-static void mode4_handle_pause(int do_level[], size_t do_count)
+/**
+ * 需要全程监测水温的步骤
+ * - status 0：初始放水
+ * - 奇数 1～67：冲水 / 中药 / 洗发 / 护发等出水步
+ * 偶数步为流程间暂停，不强制水温（无出水）
+ */
+static bool mode4_step_needs_temp(int status)
 {
-    if (get_di_pin(2) != 1)
+    if (status == 0)
     {
-        return;
+        return true;
     }
 
-    vTaskDelay(pdMS_TO_TICKS(50));
-    ESP_LOGI(TAG, "Paused");
-    for (size_t i = 0; i < do_count; ++i)
+    return status >= 1 && status <= 67 && (status & 1) != 0;
+}
+
+/**
+ * 出水步进入前检查水温（读一次 485，不重试）
+ *
+ * @return 0 通过；-1 通信失败（modbus 已推 RS485,ERR）或水温未达标
+ */
+static int mode4_water_temp_gate(int status)
+{
+    if (!mode4_step_needs_temp(status))
     {
-        do_level[i] = get_do_pin(i);
-        TURN_OFF(i);
+        return 0;
     }
 
-    while (get_di_pin(2) == 1)
+    if (temp_refresh_cache() != ESP_OK)
     {
-        vTaskDelay(pdMS_TO_TICKS(100));
+        ESP_LOGE(TAG, "485/temp read fail at status=%d, abort mode", status);
+        return -1;
     }
 
-    for (size_t i = 0; i < do_count; ++i)
+    if (!temp_get_water_ready())
     {
-        set_do_pin(i, do_level[i]);
+        temp_push_not_ready_once();
+        ESP_LOGW(TAG, "water temp not ready at status=%d, abort mode", status);
+        return -1;
     }
-    ESP_LOGI(TAG, "Resumed");
+
+    return 0;
+}
+
+/* 关输出并退出洗涤（退回空闲） */
+static int mode4_abort_exit(const char *reason)
+{
+    ESP_LOGW(TAG, "mode abort: %s", reason != NULL ? reason : "unknown");
+    mode4_all_off_enter();
+    mode4_motor_stop_enter();
+    gpio_set_level(MODE4_LIGHT_GPIO, 0);
+    TURN_OFF(25);
+    clear_mode_stop_request();
+    return -1;
 }
 
 /* 运行步骤计时，到时后停止电机并跳转到下一状态 */
@@ -186,103 +210,12 @@ static bool mode4_active_step_tick(int *time_cnt, int limit, int *status, int ne
     return false;
 }
 
-/* 判断当前状态是否需要等待温度 */
-static bool mode4_need_wait_temperature(int status)
-{
-    switch (status)
-    {
-    case 1:
-    case 3:
-    case 5:
-    case 7:
-    case 9:
-    case 11:
-    case 13:
-    case 15:
-    case 17:
-    case 19:
-    case 21:
-    case 23:
-    case 25:
-    case 27:
-    case 29:
-    case 31:
-    case 33:
-    case 35:
-    case 37:
-    case 39:
-    case 41:
-    case 43:
-    case 45:
-    case 47:
-    case 49:
-    case 51:
-    case 53:
-    case 55:
-    case 57:
-    case 59:
-    case 61:
-    case 63:
-    case 65:
-    case 67:
-        return true;
-    default:
-        return false;
-    }
-}
-
-/* 等待出水温度进入目标范围 */
-static void mode4_wait_temperature_ready(int do_level[], size_t do_count)
-{
-    uint16_t water_temp  = 0;
-    uint16_t target_temp = MODE4_DEFAULT_TARGET_TEMP;
-    uint16_t min_temp    = 0;
-    uint16_t max_temp    = 0;
-
-    while (true)
-    {
-        if (mode_stop_requested())
-        {
-            return;
-        }
-
-        mode4_handle_pause(do_level, do_count);
-
-        if (temp_read_target_temperature(&target_temp) != ESP_OK || target_temp == 0)
-        {
-            target_temp = MODE4_DEFAULT_TARGET_TEMP;
-        }
-
-        min_temp = target_temp - MODE4_TEMP_TOLERANCE;
-        max_temp = target_temp + MODE4_TEMP_TOLERANCE;
-
-        if (temp_read_water_temperature(&water_temp) == ESP_OK)
-        {
-            if (water_temp >= min_temp && water_temp <= max_temp)
-            {
-                ESP_LOGI(TAG, "temperature ready: %u", water_temp);
-                return;
-            }
-            ESP_LOGI(TAG, "waiting temperature: current=%u target=%d range=[%u,%u]",
-                     water_temp, target_temp, min_temp, max_temp);
-        }
-        else
-        {
-            ESP_LOGW(TAG, "read water temperature failed, retry");
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
-}
-
 /* 这里按 100ms 为一个计数单位，10 代表 1.0s */
 int mode4_zhongyao_v2(void)
 {
-    int status                                       = 0;
-    int time_cnt                                     = 0;
-    int runtime                                      = 0;
-    int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
-    int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
+    int status   = 0;
+    int time_cnt = 0;
+    int runtime  = 0;
 
     ESP_LOGI(TAG, "Entering mode4_zhongyao_v2");
 
@@ -290,36 +223,30 @@ int mode4_zhongyao_v2(void)
     gpio_set_level(MODE4_LIGHT_GPIO, 1);
     mode4_all_off_enter();
 
-    for (size_t i = 0; i < sizeof(di_pin) / sizeof(di_pin[0]); ++i)
-    {
-        di_level[i] = get_di_pin(i);
-    }
-
     while (true)
     {
+        if (mode_stop_requested())
+        {
+            return mode4_abort_exit("stop requested");
+        }
+
         if (time_cnt == 0)
         {
             MODE4_LOGI("enter status:%d", status);
+            if (mode4_water_temp_gate(status) != 0)
+            {
+                return mode4_abort_exit("temp or 485 fault");
+            }
         }
 
-        if (mode_stop_requested())
+        /* 暂停键由 di_input_monitor_task 处理 DO；此处仅不推进流程计时 */
+        if (di_is_pause_hold())
         {
-            ESP_LOGW(TAG, "mode stop requested");
-            mode4_all_off_enter();
-            mode4_motor_stop_enter();
-            gpio_set_level(MODE4_LIGHT_GPIO, 0);
-            TURN_OFF(25);
-            clear_mode_stop_request();
-            return -1;
+            vTaskDelay(pdMS_TO_TICKS(100));
+            continue;
         }
 
-        mode4_handle_pause(do_level, sizeof(do_pin) / sizeof(do_pin[0]));
         TURN_ON(11);
-
-        // if (time_cnt == 0 && mode4_need_wait_temperature(status))
-        // {
-        //     mode4_wait_temperature_ready(do_level, sizeof(do_pin) / sizeof(do_pin[0]));
-        // }
 
         switch (status)
         {

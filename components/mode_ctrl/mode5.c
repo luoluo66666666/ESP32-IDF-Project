@@ -34,27 +34,6 @@ int mode5_up(void)
     {
         ESP_LOGI(TAG, "mode5_up status:%d time_cnt:%d", status, time_cnt);
 
-        /* 暂停键，放在这里检测 (await_pause_and_restore) */
-        if (get_di_pin(2) == 1) // 假设 DI1 是暂停键
-        {
-            ESP_LOGI(TAG, "Paused");
-            for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
-            {
-                do_level[i] = get_do_pin(i); // 记录当前 DO 状态
-                TURN_OFF(i);                 // 关掉所有 DO
-            }
-
-            while (get_di_pin(2) == 1) // 等待暂停键释放
-            {
-                vTaskDelay(pdMS_TO_TICKS(100)); // 每 100 毫秒检查一次
-            }
-            for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
-            {
-                set_do_pin(i, do_level[i]); // 恢复 DO 状态
-            }
-            ESP_LOGI(TAG, "Resumed");
-        }
-
         switch (status)
         {
             /*──────── 0 : 放冷水 5 s ────────*/
@@ -536,27 +515,6 @@ int mode5_down(void)
     while (true)
     {
         ESP_LOGI(TAG, "mode5_down status:%d time_cnt:%d", status, time_cnt);
-
-        /* 暂停键，放在这里检测 (await_pause_and_restore) */
-        if (get_di_pin(2) == 1) 
-        {
-            ESP_LOGI(TAG, "Paused");
-            for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
-            {
-                do_level[i] = get_do_pin(i); // 记录当前 DO 状态
-                TURN_OFF(i);                 // 关掉所有 DO
-            }
-
-            while (get_di_pin(2) == 1) // 等待暂停键释放
-            {
-                vTaskDelay(pdMS_TO_TICKS(100)); // 每 100 毫秒检查一次
-            }
-            for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
-            {
-                set_do_pin(i, do_level[i]); // 恢复 DO 状态
-            }
-            ESP_LOGI(TAG, "Resumed");
-        }
 
         switch (status)
         {

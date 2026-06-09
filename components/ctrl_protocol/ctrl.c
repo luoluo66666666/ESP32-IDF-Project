@@ -67,16 +67,89 @@ static void stop_all_do_outputs(void)
     }
 }
 
+/* 处理 DI 数字输入查询（ERR 字段见 format_di_alarm_err） */
+static bool handle_di_query(const char *input, char *output, int maxlen)
+{
+    uint8_t raw = 0;
+    char err[48] = {0};
+
+    if (strcmp(input, "CMD:DI_GET") != 0)
+    {
+        return false;
+    }
+
+    raw = di_get_cached_inputs();
+    if (format_di_alarm_err(raw, err, sizeof(err)) != 0)
+    {
+        snprintf(
+            output,
+            maxlen,
+            "CMD:DI_GET,OK,DI0=%d,DI1=%d,DI2=%d,DI3=%d,DI4=%d,DI5=%d,RAW=0x%02X,ALARM=1,ERR=%s\r\n",
+            (raw >> 0) & 1,
+            (raw >> 1) & 1,
+            (raw >> 2) & 1,
+            (raw >> 3) & 1,
+            (raw >> 4) & 1,
+            (raw >> 5) & 1,
+            raw,
+            err);
+    }
+    else
+    {
+        snprintf(
+            output,
+            maxlen,
+            "CMD:DI_GET,OK,DI0=%d,DI1=%d,DI2=%d,DI3=%d,DI4=%d,DI5=%d,RAW=0x%02X,ALARM=0\r\n",
+            (raw >> 0) & 1,
+            (raw >> 1) & 1,
+            (raw >> 2) & 1,
+            (raw >> 3) & 1,
+            (raw >> 4) & 1,
+            (raw >> 5) & 1,
+            raw);
+    }
+
+    return true;
+}
+
 /* 处理模式查询命令 */
 static bool handle_mode_query(const char *input, char *output, int maxlen)
 {
+    uint8_t raw = 0;
+    char err[48] = {0};
+    int mode = 0;
+
     if (strncmp(input, "CMD:MODE_GET", strnlen("CMD:MODE_GET", maxlen)) != 0)
     {
         return false;
     }
 
     check_status();
-    snprintf(output, maxlen, "CMD:MODE_GET,OK\r\n");
+    raw  = di_get_cached_inputs();
+    mode = get_mode_status();
+
+    if (format_di_alarm_err(raw, err, sizeof(err)) != 0)
+    {
+        snprintf(
+            output,
+            maxlen,
+            "CMD:MODE_GET,OK,MODE=%d,RUN=%d,FAULT=%d,ALARM=1,ERR=%s\r\n",
+            mode,
+            get_run_status() ? 1 : 0,
+            get_fault_status() ? 1 : 0,
+            err);
+    }
+    else
+    {
+        snprintf(
+            output,
+            maxlen,
+            "CMD:MODE_GET,OK,MODE=%d,RUN=%d,FAULT=%d,ALARM=0\r\n",
+            mode,
+            get_run_status() ? 1 : 0,
+            get_fault_status() ? 1 : 0);
+    }
+
     return true;
 }
 
@@ -496,6 +569,7 @@ bool get_fault_status(void)
     return (xEventGroupGetBits(event_ctrl_protocol) & FAULT_BIT) != 0;
 }
 
+/* 请求停止当前模式 */
 bool mode_stop_requested(void)
 {
     if (event_ctrl_protocol == NULL)
@@ -506,6 +580,7 @@ bool mode_stop_requested(void)
     return (xEventGroupGetBits(event_ctrl_protocol) & MODE_STOP_BIT) != 0;
 }
 
+/* 请求停止当前模式 */
 void request_mode_stop(void)
 {
     if (event_ctrl_protocol == NULL)
@@ -520,6 +595,7 @@ void request_mode_stop(void)
                              RUN_BIT);
 }
 
+/* 清除模式停止请求 */
 void clear_mode_stop_request(void)
 {
     if (event_ctrl_protocol == NULL)
@@ -713,6 +789,9 @@ void ctrl_protocol(char *input, char *output, int maxlen)
     ESP_LOGI(TAG, "Received command: %s", input);
 
     if (wifi_module_handle_config_command(input, output, maxlen))
+        return;
+
+    if (handle_di_query(input, output, maxlen))
         return;
 
     if (handle_mode_query(input, output, maxlen))

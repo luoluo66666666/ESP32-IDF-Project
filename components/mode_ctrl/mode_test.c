@@ -65,27 +65,6 @@ void test_task(void *pvParameters)
 
         ESP_LOGI(TAG, "status:%d time_cnt:%d", status, time_cnt);
 
-        /* 暂停键，放在这里检测 (await_ pause_and_restore) */
-        if (get_di_pin(2) == 1) // 假设 DI1 是暂停键
-        {
-            vTaskDelay(pdMS_TO_TICKS(50)); // 简单防抖50ms
-            ESP_LOGI(TAG, "Paused");
-            for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
-            {
-                do_level[i] = get_do_pin(i); // 记录当前 DO 状态
-                TURN_OFF(i);                 // 关掉所有 DO
-            }
-
-            while (get_di_pin(2) == 1) // 等待暂停键释放
-            {
-                vTaskDelay(pdMS_TO_TICKS(100)); // 每 100 毫秒检查一次
-            }
-            for (size_t i = 0; i < sizeof(do_pin) / sizeof(do_pin[0]); ++i)
-            {
-                set_do_pin(i, do_level[i]); // 恢复 DO 状态
-            }
-            ESP_LOGI(TAG, "Resumed");
-        }
         TURN_ON(11);
 
         /*------------------ 状态机 ------------------*/
@@ -368,12 +347,6 @@ void sixmin_test_task(void *pvParameters)
     // int di_level[sizeof(di_pin) / sizeof(di_pin[0])] = {0};
     // int do_level[sizeof(do_pin) / sizeof(do_pin[0])] = {0};
     cur_di = input_state_change_handler();
-
-    if (check_cross_loop_lock())
-    {
-        ESP_LOGI(TAG, "Water noenough, abort mode test");
-        vTaskDelete(NULL); // 删除当前任务
-    }
 
     ESP_LOGI(TAG, "Entering mode 0");
     /* 初始化所有 DO */

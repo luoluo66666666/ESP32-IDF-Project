@@ -56,6 +56,12 @@ void mywifi_log(const char *fmt, ...);
 /* 获取 ESP32 芯片 MAC 派生的设备码（SN_XXXXXXXXXXXX） */
 const char *wifi_module_get_device_sn(void);
 
+/* 云端 TCP 是否已连接（STA 工作模式） */
+bool wifi_module_tcp_is_connected(void);
+
+/* 向云端 TCP 主动推送一行文本（如 DI,DI1=1）；未连接时丢弃 */
+void wifi_module_tcp_push_line(const char *line);
+
 /*
  * 启动 WiFi 模块
  * - 根据 NVS 配网标志 wifi_prov 决定上电进 AP 或 STA
@@ -82,6 +88,7 @@ bool wifi_module_handle_config_command(const char *input, char *output, int maxl
  */
 void wifi_ota_mode_start(const char *default_url);
 
+static void tcp_sock_send_line(int sock, const void *data, size_t data_len);
 /*
  * 退出 OTA 模式
  * 若 WiFi 由 OTA 流程启动，会停止 WiFi；否则不影响其他模块占用的 WiFi
