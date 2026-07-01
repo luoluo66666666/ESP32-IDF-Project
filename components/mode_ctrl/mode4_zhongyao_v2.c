@@ -17,15 +17,6 @@ static const char *TAG = "MODE4_V2";
 #define MODE4_LOGI(...)
 #endif
 
-/* 初始化彩灯引脚 */
-static void mode4_light_init(void)
-{
-    esp_rom_gpio_pad_select_gpio(MODE4_LIGHT_GPIO);
-    ESP_ERROR_CHECK(gpio_reset_pin(MODE4_LIGHT_GPIO));
-    ESP_ERROR_CHECK(gpio_set_direction(MODE4_LIGHT_GPIO, GPIO_MODE_OUTPUT));
-    ESP_ERROR_CHECK(gpio_set_level(MODE4_LIGHT_GPIO, 0));
-}
-
 /* 关闭全部 DO 输出 */
 static void mode4_all_off_enter(void)
 {
@@ -219,7 +210,7 @@ int mode4_zhongyao_v2(void)
 
     ESP_LOGI(TAG, "Entering mode4_zhongyao_v2");
 
-    mode4_light_init();
+    mode_light_init();
     gpio_set_level(MODE4_LIGHT_GPIO, 1);
     mode4_all_off_enter();
 

@@ -24,11 +24,11 @@
 #include "nvs_flash.h"
 
 #include "Http_ota.h"
-#include "ctrl_protocol.h"
-#include "mode_ctrl.h"
-#include "modbus_master.h"
-#include "temp.h"
 #include "Wifi_module.h"
+#include "ctrl_protocol.h"
+#include "modbus_master.h"
+#include "mode_ctrl.h"
+#include "temp.h"
 
 /*
  * WiFi 模块说明（Wifi_manage.c）
@@ -1039,17 +1039,15 @@ static bool handle_config_command(
     value = strstr(input, "CFG:SERVER_PORT=");
     if (value == input)
     {
-        char *end = NULL; /* strtol 解析结束位置 */
-        long port = 0;    /* 解析出的端口号 */
-
         value += strlen("CFG:SERVER_PORT=");
-        port = strtol(value, &end, 10);
+        char *end = NULL;
+        long port = strtol(value, &end, 10);
+        // 限制 1~65535
         if (end == value || *end != '\0' || port <= 0 || port > 65535)
         {
             snprintf(output, maxlen, "CFG:ERR,SERVER_PORT\r\n");
             return true;
         }
-
         s_runtime_config.server_port   = (uint16_t)port;
         s_pending_server_config_change = true;
         snprintf(output, maxlen, "CFG:OK,SERVER_PORT\r\n");
@@ -1276,18 +1274,16 @@ static bool should_ignore_server_line(const char *line) /* line：云端发来�
 
 /*
  * 云端 TCP 客户端任务（仅 STA 模式运行）
- * 循环：等 WiFi 有 IP → connect 云端 → 按行收命令入 rx 队列 → 从 tx 队列发应答
+ * 循环：等 WiFi 有 IP → DNS解析域名 → connect 云端 → 按行收命令入 rx 队列 → 从 tx 队列发应答
  */
-void tcp_client_task(void *param) /* param：FreeRTOS 任务参数（未使用） */
+void tcp_client_task(void *param)
 {
-    char rx_buf[256];   /* 云端 TCP 单次 recv 缓冲区 */
-    char line_buf[256]; /* 按行组包缓冲区 */
-    int line_len = 0;   /* line_buf 中已累积的字节数 */
-
+    char rx_buf[256];
+    char line_buf[256];
+    int line_len = 0;
     while (1)
     {
         maybe_rollback_wifi_config();
-
         if (s_mode_switch_requested)
         {
             if (s_run_mode == WIFI_RUN_MODE_AP_CONFIG)
@@ -1300,7 +1296,6 @@ void tcp_client_task(void *param) /* param：FreeRTOS 任务参数（未使用�
             }
             vTaskDelay(pdMS_TO_TICKS(200));
         }
-
         if (s_run_mode != WIFI_RUN_MODE_STA_WORK)
         {
             if (tcp_connected && tcp_sock >= 0)
@@ -1313,14 +1308,14 @@ void tcp_client_task(void *param) /* param：FreeRTOS 任务参数（未使用�
             vTaskDelay(pdMS_TO_TICKS(500));
             continue;
         }
-
-        EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(1000)); /* 等 STA 有 IP */
+        // 等待WiFi获取IP
+        EventBits_t bits = xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, pdMS_TO_TICKS(1000));
         if ((bits & WIFI_CONNECTED_BIT) == 0)
         {
             continue;
         }
 
-        int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP); /* 新建云端 TCP 套接字 */
+        int sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
         if (sock < 0)
         {
             ESP_LOGE(TAG, "socket create failed, errno=%d", errno);
@@ -1328,12 +1323,22 @@ void tcp_client_task(void *param) /* param：FreeRTOS 任务参数（未使用�
             continue;
         }
 
-        struct sockaddr_in server_addr = {
-            /* 云端服务器地址 */
-            .sin_family      = AF_INET,
-            .sin_port        = htons(s_runtime_config.server_port),
-            .sin_addr.s_addr = inet_addr(s_runtime_config.server_ip),
-        };
+        struct sockaddr_in server_addr = {0};
+        server_addr.sin_family         = AF_INET;
+        server_addr.sin_port           = htons(s_runtime_config.server_port);
+
+        // ========== 域名解析 ==========
+        struct hostent *host_info = gethostbyname(s_runtime_config.server_ip);
+        if (host_info == NULL)
+        {
+            ESP_LOGE(TAG, "DNS resolve failed, domain: %s", s_runtime_config.server_ip);
+            close(sock);
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            continue;
+        }
+        memcpy(&server_addr.sin_addr.s_addr, host_info->h_addr, host_info->h_length);
+        ESP_LOGI(TAG, "DNS resolve success, server ip: %s", inet_ntoa(*(struct in_addr *)host_info->h_addr));
+        // =========================================
 
         ESP_LOGI(TAG, "Connecting to %s:%u", s_runtime_config.server_ip, s_runtime_config.server_port);
         if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) != 0)
@@ -1348,55 +1353,45 @@ void tcp_client_task(void *param) /* param：FreeRTOS 任务参数（未使用�
         tcp_connected         = true;
         s_reconnect_requested = false;
         line_len              = 0;
-
         ESP_LOGI(TAG, "TCP connected");
         send_cloud_device_registration(sock);
 
         while (1)
         {
-            fd_set rfds;                                     /* select 读集合 */
-            struct timeval tv = {.tv_sec = 1, .tv_usec = 0}; /* select 超时 1 秒 */
-
+            fd_set rfds;
+            struct timeval tv = {.tv_sec = 1, .tv_usec = 0};
             FD_ZERO(&rfds);
             FD_SET(sock, &rfds);
-
-            int ret = select(sock + 1, &rfds, NULL, NULL, &tv); /* 等待可读或超时 */
+            int ret = select(sock + 1, &rfds, NULL, NULL, &tv);
             if (ret < 0)
             {
                 ESP_LOGE(TAG, "select failed, errno=%d", errno);
                 break;
             }
-
             if (ret > 0 && FD_ISSET(sock, &rfds))
             {
-                int len = recv(sock, rx_buf, sizeof(rx_buf), 0); /* 本次收到的字节数 */
+                int len = recv(sock, rx_buf, sizeof(rx_buf), 0);
                 if (len <= 0)
                 {
                     break;
                 }
-
-                for (int i = 0; i < len; i++) /* i：本次 recv 数据中的字节下标 */
+                for (int i = 0; i < len; i++)
                 {
-                    char c = rx_buf[i]; /* 当前处理的字符 */
+                    char c = rx_buf[i];
                     if (c == '\r')
-                    {
                         continue;
-                    }
-
                     if (c == '\n')
                     {
                         line_buf[line_len] = '\0';
                         trim_line(line_buf);
-
                         if (line_buf[0] != '\0' && !should_ignore_server_line(line_buf))
                         {
-                            wifi_data_t pkt = {0}; /* 入队给 wifi_protocol_task 的命令包 */
+                            wifi_data_t pkt = {0};
                             strncpy((char *)pkt.buf, line_buf, QUEUE_ITEM_SIZE - 1);
                             pkt.buf[QUEUE_ITEM_SIZE - 1] = '\0';
                             pkt.len                      = strlen((char *)pkt.buf);
                             xQueueSend(wifi_rx_queue, &pkt, 0);
                         }
-
                         line_len = 0;
                     }
                     else if (line_len < (int)sizeof(line_buf) - 1)
@@ -1405,8 +1400,8 @@ void tcp_client_task(void *param) /* param：FreeRTOS 任务参数（未使用�
                     }
                 }
             }
-
-            wifi_data_t tx = {0}; /* 从发送队列取出的应答 / 主动推送 */
+            // 发送队列数据
+            wifi_data_t tx = {0};
             while (xQueueReceive(wifi_tx_queue, &tx, 0) == pdTRUE)
             {
                 if (tx.len > 0)
@@ -1415,25 +1410,22 @@ void tcp_client_task(void *param) /* param：FreeRTOS 任务参数（未使用�
                     ESP_LOGI(TAG, "Cloud TX: %.*s", (int)tx.len, (char *)tx.buf);
                 }
             }
-
-            if (s_reconnect_requested) /* 配置变更等需要重连云端 */
+            // 需要重连 / 切换模式则跳出循环断开
+            if (s_reconnect_requested)
             {
                 ESP_LOGW(TAG, "Reconnect requested, closing current TCP session");
                 break;
             }
-
             if (s_run_mode != WIFI_RUN_MODE_STA_WORK || s_mode_switch_requested)
             {
                 break;
             }
         }
-
         ESP_LOGW(TAG, "TCP disconnected");
         tcp_connected = false;
         tcp_sock      = -1;
         shutdown(sock, SHUT_RDWR);
         close(sock);
-
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
@@ -1804,7 +1796,6 @@ void wifi_module_tcp_push_line(const char *line)
 
     ESP_LOGI(TAG, "TCP push: %s", line);
 }
-
 
 /*
  * 模块入口（main 里调用）

@@ -42,4 +42,6 @@ int motor_run(void);
 int motor_stop(void);
 int motor_finish(void);
 
+void mode_light_init(void);
+
 #endif

@@ -510,51 +510,108 @@ static bool handle_temp_command(const char *input, char *output, int maxlen)
  * DO0/DO1 = 1: 两个电机同时伸出
  * DO0/DO1 = 0: 两个电机同时回缩
  */
+// void Pole_motor_control_task(void *p)
+// {
+//     /* 上电默认回缩 */
+//     TURN_OFF(0);
+//     TURN_OFF(1);
+
+//     while (1)
+//     {
+//         xEventGroupWaitBits(event_motor_ctrl, Motor_RUN_BIT | Motor_Finsh_BIT,
+//                             pdFALSE, pdFALSE, portMAX_DELAY);
+
+//         if (xEventGroupGetBits(event_motor_ctrl) & Motor_Finsh_BIT)
+//         {
+//             /* 完成后切回回缩方向 */
+//             TURN_OFF(0);
+//             TURN_OFF(1);
+//             xEventGroupClearBits(event_motor_ctrl,
+//                                  Motor_Finsh_BIT | Motor_RUN_BIT | Motor_STOP_BIT);
+//             ESP_LOGI(TAG, "Motor FINISH detected, retract");
+//             continue;
+//         }
+
+//         while (xEventGroupGetBits(event_motor_ctrl) & Motor_RUN_BIT)
+//         {
+//             /* 运行时两个电机同时伸出 */
+//             TURN_ON(0);
+//             TURN_ON(1);
+
+//             EventBits_t bits = xEventGroupGetBits(event_motor_ctrl);
+//             if (bits & Motor_STOP_BIT) {
+//                 break;
+//             }
+//             if (bits & Motor_Finsh_BIT) {
+//                 break;
+//             }
+
+//             vTaskDelay(pdMS_TO_TICKS(50));
+//         }
+
+//         /* 停止后切回回缩方向 */
+//         TURN_OFF(0);
+//         TURN_OFF(1);
+//         xEventGroupClearBits(event_motor_ctrl,
+//                              Motor_STOP_BIT | Motor_RUN_BIT | Motor_Finsh_BIT);
+//         ESP_LOGI(TAG, "Motor STOP detected, retract");
+//     }
+// }
+
+/* 撑杆电机控制任务
+ * 继电器常闭=GND，常开=12V
+ * DOx=1 → 接通12V；DOx=0 → 接通GND
+ * 同步伸出：DO0=1, DO1=0
+ * 同步回缩：DO0=0, DO1=1
+ * 停机：DO0=0, DO1=0
+ */
 void Pole_motor_control_task(void *p)
 {
-    /* 上电默认回缩 */
+    /* 上电默认同步回缩 */
     TURN_OFF(0);
-    TURN_OFF(1);
+    TURN_ON(1);
 
     while (1)
     {
+        // 等待运行/完成事件
         xEventGroupWaitBits(event_motor_ctrl, Motor_RUN_BIT | Motor_Finsh_BIT,
                             pdFALSE, pdFALSE, portMAX_DELAY);
 
-        if (xEventGroupGetBits(event_motor_ctrl) & Motor_Finsh_BIT)
+        EventBits_t cur_bits = xEventGroupGetBits(event_motor_ctrl);
+        // 1、收到完成信号：立刻回缩
+        if (cur_bits & Motor_Finsh_BIT)
         {
-            /* 完成后切回回缩方向 */
             TURN_OFF(0);
-            TURN_OFF(1);
+            TURN_ON(1);
             xEventGroupClearBits(event_motor_ctrl,
                                  Motor_Finsh_BIT | Motor_RUN_BIT | Motor_STOP_BIT);
-            ESP_LOGI(TAG, "Motor FINISH detected, retract");
+            ESP_LOGI(TAG, "Motor FINISH -> retract(0,1)");
             continue;
         }
 
+        // 2、收到运行信号：持续伸出
         while (xEventGroupGetBits(event_motor_ctrl) & Motor_RUN_BIT)
         {
-            /* 运行时两个电机同时伸出 */
+            // 同步伸出：DO0=1 DO1=0
             TURN_ON(0);
-            TURN_ON(1);
+            TURN_OFF(1);
 
-            EventBits_t bits = xEventGroupGetBits(event_motor_ctrl);
-            if (bits & Motor_STOP_BIT) {
-                break;
-            }
-            if (bits & Motor_Finsh_BIT) {
+            EventBits_t loop_bits = xEventGroupGetBits(event_motor_ctrl);
+            // 检测停止/完成，跳出伸出循环
+            if ((loop_bits & Motor_STOP_BIT) || (loop_bits & Motor_Finsh_BIT))
+            {
                 break;
             }
 
             vTaskDelay(pdMS_TO_TICKS(50));
         }
 
-        /* 停止后切回回缩方向 */
+        // 3、收到停止信号：停机（双GND）
         TURN_OFF(0);
         TURN_OFF(1);
         xEventGroupClearBits(event_motor_ctrl,
                              Motor_STOP_BIT | Motor_RUN_BIT | Motor_Finsh_BIT);
-        ESP_LOGI(TAG, "Motor STOP detected, retract");
+        ESP_LOGI(TAG, "Motor STOP -> power off(0,0)");
     }
 }
 
@@ -813,4 +870,14 @@ void ctrl_protocol(char *input, char *output, int maxlen)
 
     ESP_LOGE(TAG, "Invalid command");
     snprintf(output, maxlen, "CMD:ERR\r\n");
+}
+
+
+/* 初始化彩灯引脚 */
+void mode_light_init(void)
+{
+    esp_rom_gpio_pad_select_gpio(GPIO_NUM_19);
+    ESP_ERROR_CHECK(gpio_reset_pin(GPIO_NUM_19));
+    ESP_ERROR_CHECK(gpio_set_direction(GPIO_NUM_19, GPIO_MODE_OUTPUT));
+    ESP_ERROR_CHECK(gpio_set_level(GPIO_NUM_19, 0));
 }
