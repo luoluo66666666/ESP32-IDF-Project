@@ -62,8 +62,8 @@ int di_pin[] = {
     GPIO_NUM_4,  /* [0] MCU_DI_0 */
     GPIO_NUM_5,  /* [1] MCU_DI_1 */
     GPIO_NUM_6,  /* [2] MCU_DI_2 */
-    GPIO_NUM_7,  /* [3] MCU_DI_3 流量脉冲 */
-    GPIO_NUM_15, /* [4] MCU_DI_4 水位等 */
+    GPIO_NUM_7,  /* [3] MCU_DI_3  */
+    GPIO_NUM_15, /* [4] MCU_DI_4 */
     GPIO_NUM_16, /* [5] MCU_DI_5 */
 };
 
@@ -77,8 +77,8 @@ int di_pin[] = {
 const uint8_t di_role_config[DI_CHANNEL_COUNT] = {
     DI_ROLE_ALARM, /* [0] DI0 */
     DI_ROLE_ALARM, /* [1] DI1 */
-    DI_ROLE_PAUSE, /* [2] DI2 暂停键 */
-    DI_ROLE_ALARM,  /* [3] DI3 */
+    DI_ROLE_ALARM, /* [2] DI2  */
+    DI_ROLE_PAUSE,  /* [3] DI3 暂停键*/
     DI_ROLE_NONE,  /* [4] DI4 */
     DI_ROLE_NONE,  /* [5] DI5 */
 };
